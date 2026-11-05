@@ -16,12 +16,14 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * 학생과 강의를 잇는 수강 기록. 학생·강의 쌍당 한 행이며, 재신청은 상태를 바꿔 처리한다 (D-02).
  */
 @Entity
-@Table(name = "enrollments",
+@Table(name = "enrollment",
 		uniqueConstraints = @UniqueConstraint(name = "uk_enrollment_student_course", columnNames = {"student_id", "course_id"}))
 public class Enrollment {
 
@@ -38,6 +40,7 @@ public class Enrollment {
 	private Course course;
 
 	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false, length = 20)
 	private EnrollmentStatus status;
 

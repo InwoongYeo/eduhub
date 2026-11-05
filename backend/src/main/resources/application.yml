@@ -5,6 +5,10 @@ spring:
     default: local
   jpa:
     open-in-view: false
+    properties:
+      hibernate:
+        type:
+          preferred_instant_jdbc_type: TIMESTAMP   # Instant를 MySQL DATETIME(6)에 저장 (Flyway SQL과 일치)
   data:
     web:
       pageable:

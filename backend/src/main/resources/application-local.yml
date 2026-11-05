@@ -8,6 +8,8 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: true
+  flyway:
+    enabled: false   # local은 JPA가 스키마를 만든다. Flyway는 dev·prod에서 사용
 
 springdoc:
   api-docs:

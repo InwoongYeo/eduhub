@@ -15,9 +15,11 @@ import jakarta.persistence.Index;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 @Entity
-@Table(name = "courses", indexes = @Index(name = "idx_course_title", columnList = "title")) // D-05, NFR-05
+@Table(name = "course", indexes = @Index(name = "idx_course_title", columnList = "title")) // D-05, NFR-05
 public class Course {
 
 	@Id
@@ -43,6 +45,7 @@ public class Course {
 	private LocalDate startDate;
 
 	@Enumerated(EnumType.STRING)
+	@JdbcTypeCode(SqlTypes.VARCHAR)
 	@Column(nullable = false, length = 20)
 	private CourseStatus status;
 
