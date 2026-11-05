@@ -60,4 +60,5 @@ EduHub는 **온라인 강의 수강 관리 서비스**다. 강사가 강의를 �
 | D-10 | 개발 DB와 스키마 관리 | dev 프로필은 docker-compose MySQL 8.4, 접속 정보는 `.env`. 스키마는 Flyway가 만들고 JPA는 `validate`. local(H2)은 기존대로 JPA가 생성 | NFR-04 |
 | D-11 | course_session의 의미 | 강의의 수업 회차. 강의 1개에 여러 회차(회차 번호, 제목, 시작·종료 시각). 수강 신청은 강의 단위 유지 | FR-02 |
 | D-12 | 마이그레이션 분리 | V1: course·course_session, V2: users·enrollment와 course.instructor_id 외래 키 | D-10 |
+| D-13 | dev MySQL 계정 | 개발용은 root 계정 사용, 비밀번호는 `.env`의 `MYSQL_ROOT_PASSWORD`. 운영(prod)은 별도 계정(`DB_USERNAME`) | NFR-04 |
 
