@@ -1,0 +1,22 @@
+# 개발용: H2 메모리 DB, Swagger UI 켬 (D-07)
+spring:
+  datasource:
+    url: jdbc:h2:mem:eduhub;MODE=MySQL
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+springdoc:
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+
+# 로컬 초기 관리자 (D-04). 환경 변수가 없으면 로컬 전용 기본값을 쓴다.
+eduhub:
+  admin:
+    email: ${ADMIN_EMAIL:admin@eduhub.local}
+    password: ${ADMIN_PASSWORD:local-admin-only}

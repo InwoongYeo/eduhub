@@ -9,6 +9,9 @@ node_modules/
 # 빌드 결과물
 dist/
 build/
+.gradle/
+out/
+!gradle/wrapper/gradle-wrapper.jar
 
 # 로그
 *.log
@@ -20,3 +23,6 @@ Thumbs.db
 # 에디터
 .vscode/
 .idea/
+
+# Claude Code 개인 설정
+.claude/settings.local.json
