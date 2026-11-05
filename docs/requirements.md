@@ -16,7 +16,7 @@ EduHub는 **온라인 강의 수강 관리 서비스**다. 강사가 강의를 �
 |---|---|
 | 백엔드 | Java 21, Spring Boot 4.1.2 (D-09) |
 | 보안 | Spring Security + JWT |
-| 데이터 | Spring Data JPA, H2(개발) / MySQL(운영) |
+| 데이터 | Spring Data JPA, Flyway, H2(local) / MySQL 8.4(dev: docker-compose, prod) (D-10) |
 | API 문서 | springdoc-openapi (Swagger UI) |
 | 빌드·테스트 | Gradle, JUnit 5 |
 
@@ -57,4 +57,7 @@ EduHub는 **온라인 강의 수강 관리 서비스**다. 강사가 강의를 �
 | D-07 | prod에서 Swagger UI | 끈다 (`local`에서만 노출) | NFR-02, NFR-04 |
 | D-08 | 1주차 NFR 반영 범위 | 보안 뼈대, API 문서, 품질(오류 형식·테스트 환경), 프로필, 패키지 구조. 성능은 페이지 단위 설계만 | NFR-01~06 |
 | D-09 | Spring Boot 버전 | 4.1.2 (3.x는 무료 지원 종료, Initializr도 4.x만 제공) | 기술 스택 |
+| D-10 | 개발 DB와 스키마 관리 | dev 프로필은 docker-compose MySQL 8.4, 접속 정보는 `.env`. 스키마는 Flyway가 만들고 JPA는 `validate`. local(H2)은 기존대로 JPA가 생성 | NFR-04 |
+| D-11 | course_session의 의미 | 강의의 수업 회차. 강의 1개에 여러 회차(회차 번호, 제목, 시작·종료 시각). 수강 신청은 강의 단위 유지 | FR-02 |
+| D-12 | 마이그레이션 분리 | V1: course·course_session, V2: users·enrollment와 course.instructor_id 외래 키 | D-10 |
 
