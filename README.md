@@ -1,6 +1,6 @@
 # EduHub
 
-온라인 강의 수강 관리 서비스. 요구사항과 결정 사항은 [docs/requirements.md](docs/requirements.md)를 참고하세요.
+사내 교육과정 조회·수강 신청 시스템. 요구사항과 결정 사항은 [docs/requirements.md](docs/requirements.md)를 참고하세요.
 
 ## 폴더 구조
 
