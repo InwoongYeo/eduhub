@@ -21,7 +21,7 @@ export function useCourses({ keyword, category, page, size }: UseCoursesParams) 
     setError(undefined);
 
     courseApi
-      .getCourses(keyword || undefined, category || undefined, page + 1, size)
+      .getCourses(keyword || undefined, category || undefined, page, size)
       .then((response) => {
         if (!ignore) setData(response.data);
       })
