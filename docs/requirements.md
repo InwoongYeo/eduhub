@@ -14,11 +14,11 @@ EduHub는 **사내 교육과정 조회·수강 신청 시스템**이다. 임직�
 | 구분 | 기술 |
 |---|---|
 | 백엔드 | Java 21, Spring Boot 4.1.2 (D-09, D-16), Spring Data JPA, Flyway, springdoc-openapi |
-| 데이터 | PostgreSQL (D-15) |
+| 데이터 | MySQL 8.4 (D-23) |
 | 프론트엔드 | React 18 + TypeScript, Module Federation(shell, course-mfe, enrollment-mfe), MUI, Axios |
 | 빌드 | Gradle(Kotlin DSL), npm workspaces |
 
-> 현재 코드는 아직 이전 스택(MySQL, Gradle Groovy DSL, 프론트엔드 없음) 상태다. 반영 시점은 D-19.
+> 백엔드는 이 스택으로 옮겼다(2주차). 프론트엔드는 아직 없다 (D-19).
 
 ## 기능 요구사항 (FR)
 
@@ -55,20 +55,24 @@ EduHub는 **사내 교육과정 조회·수강 신청 시스템**이다. 임직�
 |---|---|---|---|---|
 | D-01 | 한 계정이 강사이면서 학생일 수 있는가 | 계정당 역할은 하나 | NFR-03 | 유효 (역할 목록은 D-14로 대체) |
 | D-02 | 수강 취소 기한과 재신청 | 강의 시작 전까지 취소 가능, 취소 후 재신청 가능 | FR-04, FR-06 | 재검토 (회차 단위 신청·대기 승급 반영 필요) |
-| D-03 | 수강생이 있는 강의 삭제 | 수강생이 있으면 삭제 불가, "폐강" 상태로 전환 | FR-03 | 재검토 (FR-03의 "종료"와 관계 정리 필요) |
+| D-03 | 수강생이 있는 강의 삭제 | 과정·회차는 삭제하지 않는다. FR-03의 "종료"는 상태를 CLOSED로 바꾸는 것이고, 과정을 종료하면 그 회차도 모두 종료된다. 종료된 과정·회차는 수정할 수 없다 | FR-03 | 유효 (2주차에 정리) |
 | D-04 | 최초 관리자 계정 생성 | `local`은 초기 데이터, `prod`는 환경 변수로 생성 | FR-03, NFR-06 | 유효 |
 | D-05 | 강의 검색 범위 | 제목과 강사 이름 | FR-01 | 대체 (D-18) |
-| D-06 | JWT 발급·검증 시점 | 2주차로 미룬다. 1주차는 보안 설정·BCrypt·URL 권한 틀만 | NFR-03 | 유효 |
+| D-06 | JWT 발급·검증 시점 | 2주차에 구현. `POST /api/auth/login`이 HS256 JWT(subject=사용자 id, `role` 클레임)를 발급하고, Spring Security 리소스 서버가 검증한다. 키는 `JWT_SECRET`(local만 기본값). 회원가입은 없다 | NFR-03 | 완료 |
 | D-07 | prod에서 Swagger UI | 끈다 (`local`에서만 노출) | NFR-04, NFR-06 | 유효 |
 | D-08 | 1주차 NFR 반영 범위 | 보안 뼈대, API 문서, 품질(오류 형식·테스트 환경), 프로필, 패키지 구조. 성능은 페이지 단위 설계만 | - | 완료 |
 | D-09 | Spring Boot 버전 | 4.1.2 (3.x는 무료 지원 종료, Initializr도 4.x만 제공) | 기술 스택 | 유효 (D-16) |
-| D-10 | 개발 DB와 스키마 관리 | dev 프로필은 docker-compose MySQL 8.4, 접속 정보는 `.env`. 스키마는 Flyway가 만들고 JPA는 `validate`. local(H2)은 기존대로 JPA가 생성 | NFR-06 | 대체 (DB 종류는 D-15, Flyway·`validate` 방식은 유지) |
+| D-10 | 개발 DB와 스키마 관리 | dev 프로필은 docker-compose MySQL 8.4, 접속 정보는 `.env`. 스키마는 Flyway가 만들고 JPA는 `validate`. local(H2)은 기존대로 JPA가 생성 | NFR-06 | 유효 (local 스키마 부분만 D-20으로 대체) |
 | D-11 | course_session의 의미 | 강의의 수업 회차. 강의 1개에 여러 회차(회차 번호, 제목, 시작·종료 시각). 수강 신청은 강의 단위 유지 | FR-02 | 대체 (신청 단위는 D-17) |
-| D-12 | 마이그레이션 분리 | V1: course·course_session, V2: users·enrollment와 course.instructor_id 외래 키 | D-10 | 완료 |
-| D-13 | dev MySQL 계정 | 개발용은 root 계정 사용, 비밀번호는 `.env`의 `MYSQL_ROOT_PASSWORD`. 운영(prod)은 별도 계정(`DB_USERNAME`) | NFR-06 | 대체 (D-15) |
+| D-12 | 마이그레이션 분리 | V1: course·course_session, V2: users·enrollment와 course.instructor_id 외래 키 | D-10 | 완료 (V3로 새 모델 전환, D-20) |
+| D-13 | dev MySQL 계정 | 개발용은 root 계정 사용, 비밀번호는 `.env`의 `MYSQL_ROOT_PASSWORD`. 운영(prod)은 별도 계정(`DB_USERNAME`) | NFR-06 | 유효 (D-23) |
 | D-14 | 서비스 범위와 사용자 | 온라인 강의 수강 관리 → 사내 교육과정 조회·수강 신청(대기자 포함). 역할은 임직원·관리자 2개 (강사 역할 없음) | 개요 | 유효 |
-| D-15 | 데이터베이스 | MySQL → PostgreSQL. dev 환경(docker-compose, `.env`)과 Flyway SQL을 PostgreSQL 기준으로 바꾼다 | 기술 스택, NFR-06 | 유효 (코드 미반영) |
+| D-15 | 데이터베이스 | MySQL → PostgreSQL. dev 환경(docker-compose, `.env`)과 Flyway SQL을 PostgreSQL 기준으로 바꾼다 | 기술 스택, NFR-06 | 대체 (D-23) |
 | D-16 | 요구사항 초안의 "Spring Boot 3" 표기 | D-09대로 4.1.2 유지. 초안 표기를 정정 | 기술 스택 | 유효 |
-| D-17 | 수강 신청 단위 | 강의(과정) 단위 → 회차 단위. 중복 신청 방지·정원·대기 순번 모두 회차 기준 | FR-04~06 | 유효 (코드 미반영) |
-| D-18 | 과정 검색 범위 | 제목과 분류 | FR-01 | 유효 (코드 미반영) |
-| D-19 | 새 요구사항의 코드 반영 시점 | 이번에는 문서만 바꾼다. 코드는 FR의 주차 계획에 따라 단계적으로 반영한다 | 전체 | 유효 |
+| D-17 | 수강 신청 단위 | 강의(과정) 단위 → 회차 단위. 중복 신청 방지·정원·대기 순번 모두 회차 기준 | FR-04~06 | 유효 |
+| D-18 | 과정 검색 범위 | 제목은 부분 일치(`keyword`), 분류는 정확히 일치(`category`). 둘 다 생략 가능 | FR-01 | 유효 |
+| D-19 | 새 요구사항의 코드 반영 시점 | 2주차에 백엔드 기반(스택, 역할, 데이터 모델)과 FR-01~03을 반영했다. FR-04 이후와 프론트엔드는 FR 표의 주차대로 | 전체 | 유효 |
+| D-20 | 새 모델의 마이그레이션 | 이미 적용된 V1·V2는 고치지 않고 `V3__session_enrollment_model.sql`로 새 모델(과정 분류, 회차 장소·정원·확정 인원·상태, 회차 단위 신청, 역할 2개)로 바꾼다. 강의 단위 신청은 회차로 옮길 수 없어 enrollment 테이블은 새로 만든다. local도 H2(MySQL 모드) + Flyway + `validate`로 바꿔 모든 프로필의 스키마 경로를 하나로 한다(D-10의 local 부분 대체) | D-10, D-12 | 유효 |
+| D-21 | 남은 자리 계산 | 회차에 확정 인원(`confirmed_count`)을 두고 남은 자리 = 정원 - 확정 인원. 목록·상세에서 신청 행을 세지 않고, 3주차 동시성 제어(NFR-01)는 이 회차 행을 잠가 처리한다. DB에 `0 ≤ confirmed_count ≤ capacity` 검사 제약. 정원은 확정 인원보다 적게 줄일 수 없다 | FR-02, FR-05, NFR-01 | 유효 |
+| D-22 | 조회 API 인증 | 과정 목록·상세 조회(GET `/api/courses/**`)는 로그인 없이 허용. `/api/admin/**`은 ADMIN만, 그 밖의 API는 로그인 필요 | FR-01~03, NFR-03 | 유효 |
+| D-23 | 데이터베이스 (D-15 번복) | PostgreSQL로 바꾸지 않고 MySQL 8.4를 유지한다. dev는 docker-compose MySQL + root 계정(D-13) 그대로 | 기술 스택, NFR-06 | 유효 |
