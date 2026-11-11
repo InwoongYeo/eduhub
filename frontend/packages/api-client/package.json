@@ -5,7 +5,7 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "generate:api": "openapi-generator-cli generate -i openapi.json -g typescript-axios -o src/generated --additional-properties=supportsES6=true,withSeparateModelsAndApi=false",
+    "generate:api": "openapi-generator-cli generate -i openapi.json -g typescript-axios -o src/generated --additional-properties=supportsES6=true",
     "refresh:spec": "node scripts/refresh-spec.mjs"
   },
   "dependencies": {
