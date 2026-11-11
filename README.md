@@ -7,6 +7,7 @@
 ```
 eduhub/
 ├── backend/            # Spring Boot 4.1.2 / Java 21 (Gradle Kotlin DSL)
+├── frontend/           # React 18 + TypeScript (npm workspaces): apps/course-mfe, packages/api-client
 ├── docs/               # 요구사항·결정 사항
 ├── docker-compose.yml  # 개발용 MySQL 8.4 (dev 프로필)
 ├── .env.example        # 환경 변수 예시 (복사해서 .env로 사용)
@@ -31,6 +32,20 @@ eduhub/
    local 기본 계정: `admin@eduhub.local` / `local-admin-only` (관리자), `employee@eduhub.local` / `local-employee-only` (임직원)
 
 테스트: `cd backend && ./gradlew test`
+
+### 프론트엔드 (과정 목록 화면)
+
+준비물: Node.js 20 이상. 백엔드를 `local`로 띄운 상태에서 실행합니다.
+
+```bash
+cd frontend
+npm install
+npm run generate:api   # packages/api-client/openapi.json → 생성 클라이언트
+npm test
+npm run dev            # http://localhost:3001 (/api 요청은 8080으로 프록시)
+```
+
+API가 바뀌면 백엔드를 띄운 채 `npm run refresh:spec -w packages/api-client`로 `openapi.json`을 갱신한 뒤 다시 생성합니다.
 
 ### dev 프로필 (MySQL)
 

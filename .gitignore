@@ -6,6 +6,9 @@
 # 의존성
 node_modules/
 
+# 생성 코드 (npm run generate:api로 다시 만든다)
+frontend/packages/api-client/src/generated/
+
 # 빌드 결과물
 dist/
 build/
