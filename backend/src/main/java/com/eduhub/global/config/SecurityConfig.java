@@ -32,7 +32,7 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 
 /**
- * 무상태 JWT 인증 (D-06, NFR-03). 토큰은 POST /api/auth/login에서 발급하고
+ * 무상태 JWT 인증 (D-06, NFR-03). 토큰은 POST /api/v1/auth/login에서 발급하고
  * Authorization: Bearer 헤더로 받는다. role 클레임이 ROLE_ 권한이 된다.
  */
 @Configuration
@@ -55,11 +55,11 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers("/error").permitAll()
 						.requestMatchers(SWAGGER_PATHS).permitAll()
-						.requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
-						// FR-01·02: 과정 조회는 로그인 없이
-						.requestMatchers(HttpMethod.GET, "/api/courses", "/api/courses/**").permitAll()
-						// FR-03: 과정·회차 관리는 관리자만
-						.requestMatchers("/api/admin/**").hasRole("ADMIN")
+						.requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+						// FR-01·02: 과정 조회는 로그인 없이 (D-22)
+						.requestMatchers(HttpMethod.GET, "/api/v1/courses", "/api/v1/courses/**").permitAll()
+						// FR-03: 과정·회차 등록·수정·종료는 관리자만
+						.requestMatchers("/api/v1/courses", "/api/v1/courses/**", "/api/v1/sessions/**").hasRole("ADMIN")
 						.anyRequest().authenticated())
 				.oauth2ResourceServer(resource -> resource
 						.jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter()))

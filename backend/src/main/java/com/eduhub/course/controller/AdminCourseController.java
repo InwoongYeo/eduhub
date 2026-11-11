@@ -18,11 +18,11 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 관리자 전용. /api/admin/** 은 ADMIN 역할만 접근한다 (SecurityConfig).
+ * 과정·회차 관리 (FR-03). 조회가 아닌 /api/v1/courses/**, /api/v1/sessions/** 는 ADMIN 역할만 (SecurityConfig).
  */
-@Tag(name = "교육과정 관리", description = "관리자의 과정·회차 등록·수정·종료")
+@Tag(name = "Course", description = "교육과정 조회·관리")
 @RestController
-@RequestMapping("/api/admin")
+@RequestMapping("/api/v1")
 public class AdminCourseController {
 
 	private final CourseAdminService courseAdminService;

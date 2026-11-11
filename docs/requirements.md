@@ -58,7 +58,7 @@ EduHub는 **사내 교육과정 조회·수강 신청 시스템**이다. 임직�
 | D-03 | 수강생이 있는 강의 삭제 | 과정·회차는 삭제하지 않는다. FR-03의 "종료"는 상태를 CLOSED로 바꾸는 것이고, 과정을 종료하면 그 회차도 모두 종료된다. 종료된 과정·회차는 수정할 수 없다 | FR-03 | 유효 (2주차에 정리) |
 | D-04 | 최초 관리자 계정 생성 | `local`은 초기 데이터, `prod`는 환경 변수로 생성 | FR-03, NFR-06 | 유효 |
 | D-05 | 강의 검색 범위 | 제목과 강사 이름 | FR-01 | 대체 (D-18) |
-| D-06 | JWT 발급·검증 시점 | 2주차에 구현. `POST /api/auth/login`이 HS256 JWT(subject=사용자 id, `role` 클레임)를 발급하고, Spring Security 리소스 서버가 검증한다. 키는 `JWT_SECRET`(local만 기본값). 회원가입은 없다 | NFR-03 | 완료 |
+| D-06 | JWT 발급·검증 시점 | 2주차에 구현. `POST /api/v1/auth/login`이 HS256 JWT(subject=사용자 id, `role` 클레임)를 발급하고, Spring Security 리소스 서버가 검증한다. 키는 `JWT_SECRET`(local만 기본값). 회원가입은 없다 | NFR-03 | 완료 |
 | D-07 | prod에서 Swagger UI | 끈다 (`local`에서만 노출) | NFR-04, NFR-06 | 유효 |
 | D-08 | 1주차 NFR 반영 범위 | 보안 뼈대, API 문서, 품질(오류 형식·테스트 환경), 프로필, 패키지 구조. 성능은 페이지 단위 설계만 | - | 완료 |
 | D-09 | Spring Boot 버전 | 4.1.2 (3.x는 무료 지원 종료, Initializr도 4.x만 제공) | 기술 스택 | 유효 (D-16) |
@@ -74,5 +74,6 @@ EduHub는 **사내 교육과정 조회·수강 신청 시스템**이다. 임직�
 | D-19 | 새 요구사항의 코드 반영 시점 | 2주차에 백엔드 기반(스택, 역할, 데이터 모델)과 FR-01~03을 반영했다. FR-04 이후와 프론트엔드는 FR 표의 주차대로 | 전체 | 유효 |
 | D-20 | 새 모델의 마이그레이션 | 이미 적용된 V1·V2는 고치지 않고 `V3__session_enrollment_model.sql`로 새 모델(과정 분류, 회차 장소·정원·확정 인원·상태, 회차 단위 신청, 역할 2개)로 바꾼다. 강의 단위 신청은 회차로 옮길 수 없어 enrollment 테이블은 새로 만든다. local도 H2(MySQL 모드) + Flyway + `validate`로 바꿔 모든 프로필의 스키마 경로를 하나로 한다(D-10의 local 부분 대체) | D-10, D-12 | 유효 |
 | D-21 | 남은 자리 계산 | 회차에 확정 인원(`confirmed_count`)을 두고 남은 자리 = 정원 - 확정 인원. 목록·상세에서 신청 행을 세지 않고, 3주차 동시성 제어(NFR-01)는 이 회차 행을 잠가 처리한다. DB에 `0 ≤ confirmed_count ≤ capacity` 검사 제약. 정원은 확정 인원보다 적게 줄일 수 없다 | FR-02, FR-05, NFR-01 | 유효 |
-| D-22 | 조회 API 인증 | 과정 목록·상세 조회(GET `/api/courses/**`)는 로그인 없이 허용. `/api/admin/**`은 ADMIN만, 그 밖의 API는 로그인 필요 | FR-01~03, NFR-03 | 유효 |
+| D-22 | 조회 API 인증 | 과정 목록·상세 조회(GET `/api/v1/courses/**`)는 로그인 없이 허용. 과정·회차 등록·수정·종료(그 밖의 `/api/v1/courses/**`, `/api/v1/sessions/**`)는 ADMIN만, 그 밖의 API는 로그인 필요 (경로는 D-24) | FR-01~03, NFR-03 | 유효 |
 | D-23 | 데이터베이스 (D-15 번복) | PostgreSQL로 바꾸지 않고 MySQL 8.4를 유지한다. dev는 docker-compose MySQL + root 계정(D-13) 그대로 | 기술 스택, NFR-06 | 유효 |
+| D-24 | API 경로와 목록 응답 (3회차 자료 반영) | 모든 API를 `/api/v1` 아래로 옮긴다. 조회는 `GET /api/v1/courses`, `GET /api/v1/courses/{courseId}`, 관리는 `POST /api/v1/courses`, `PUT /api/v1/courses/{courseId}`, `POST /api/v1/courses/{courseId}/sessions`, `POST /api/v1/courses/{courseId}/close`, 회차 수정·종료는 `PUT /api/v1/sessions/{sessionId}`, `POST /api/v1/sessions/{sessionId}/close`, 로그인은 `POST /api/v1/auth/login`. 목록 항목(`CourseSummaryResponse`)에 회차 수 `sessionCount`를 넣고, 목록 조회 뒤 한 번의 집계 쿼리로 채운다(N+1 없음). 관리 API는 D-22대로 ADMIN 권한을 유지한다 | FR-01~03, NFR-02, NFR-04 | 유효 |

@@ -25,7 +25,7 @@ class CourseControllerTest {
 
 	@Test
 	void 과정_목록은_로그인_없이_페이지_형식으로_조회된다() throws Exception {
-		mockMvc.perform(get("/api/courses").param("size", "2"))
+		mockMvc.perform(get("/api/v1/courses").param("size", "2"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.content.length()").value(2))
 				.andExpect(jsonPath("$.size").value(2))
@@ -34,24 +34,32 @@ class CourseControllerTest {
 
 	@Test
 	void 분류로_검색할_수_있다() throws Exception {
-		mockMvc.perform(get("/api/courses").param("category", "개발"))
+		mockMvc.perform(get("/api/v1/courses").param("category", "개발"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.totalElements").value(2));
 	}
 
 	@Test
 	void 제목과_분류를_함께_검색할_수_있다() throws Exception {
-		mockMvc.perform(get("/api/courses").param("keyword", "스프링").param("category", "개발"))
+		mockMvc.perform(get("/api/v1/courses").param("keyword", "스프링").param("category", "개발"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.totalElements").value(1))
-				.andExpect(jsonPath("$.content[0].title").value("스프링 부트 입문"));
+				.andExpect(jsonPath("$.content[0].title").value("스프링 부트 입문"))
+				.andExpect(jsonPath("$.content[0].sessionCount").value(1));
+	}
+
+	@Test
+	void 목록의_회차_수는_과정별로_집계된다() throws Exception {
+		mockMvc.perform(get("/api/v1/courses").param("keyword", "자바 기초"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.content[0].sessionCount").value(2));
 	}
 
 	@Test
 	void 과정_상세는_회차의_장소와_남은_자리를_포함한다() throws Exception {
 		long javaId = findCourseId("자바 기초");
 
-		mockMvc.perform(get("/api/courses/{id}", javaId))
+		mockMvc.perform(get("/api/v1/courses/{id}", javaId))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.category").value("개발"))
 				.andExpect(jsonPath("$.sessions.length()").value(2))
@@ -63,7 +71,7 @@ class CourseControllerTest {
 
 	@Test
 	void 없는_과정은_공통_오류_형식의_404를_돌려준다() throws Exception {
-		mockMvc.perform(get("/api/courses/99999"))
+		mockMvc.perform(get("/api/v1/courses/99999"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.code").value("C001"))
 				.andExpect(jsonPath("$.message").exists())
@@ -78,7 +86,7 @@ class CourseControllerTest {
 	}
 
 	private long findCourseId(String title) throws Exception {
-		String body = mockMvc.perform(get("/api/courses").param("keyword", title))
+		String body = mockMvc.perform(get("/api/v1/courses").param("keyword", title))
 				.andReturn().getResponse().getContentAsString();
 		return JsonPath.<Number>read(body, "$.content[0].id").longValue();
 	}

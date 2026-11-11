@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @Tag(name = "인증", description = "로그인과 액세스 토큰 발급")
 @RestController
-@RequestMapping("/api/auth")
+@RequestMapping("/api/v1/auth")
 public class AuthController {
 
 	private final AuthService authService;

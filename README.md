@@ -27,7 +27,7 @@ eduhub/
 
 2. API 문서: http://localhost:8080/swagger-ui.html (`local`에서만)
 
-3. 관리자 API를 쓰려면 `POST /api/auth/login`으로 토큰을 받아 Swagger의 Authorize에 넣습니다.
+3. 관리자 API를 쓰려면 `POST /api/v1/auth/login`으로 토큰을 받아 Swagger의 Authorize에 넣습니다.
    local 기본 계정: `admin@eduhub.local` / `local-admin-only` (관리자), `employee@eduhub.local` / `local-employee-only` (임직원)
 
 테스트: `cd backend && ./gradlew test`

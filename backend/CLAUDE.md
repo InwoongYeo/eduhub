@@ -8,7 +8,7 @@ Spring Boot 4.1.2 · Java 21 · Gradle Kotlin DSL. 기본 패키지는 `com.eduh
 - 클래스 하나: `./gradlew test --tests "com.eduhub.course.service.CourseAdminServiceTest"`
 - 메서드 하나: `./gradlew test --tests "com.eduhub.course.service.CourseAdminServiceTest.메서드명"`
 - 서비스: Mockito 단위 테스트. 컨트롤러: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional`(테스트마다 롤백)
-- 컨트롤러 테스트는 `local` 초기 데이터(`LocalDataInitializer`: 과정 3개, 관리자·임직원 계정)에 의존하고, 관리자 API는 `/api/auth/login`으로 받은 실제 토큰을 쓴다
+- 컨트롤러 테스트는 `local` 초기 데이터(`LocalDataInitializer`: 과정 3개, 관리자·임직원 계정)에 의존하고, 관리자 API는 `/api/v1/auth/login`으로 받은 실제 토큰을 쓴다
 - `SchemaMappingTest`: H2에서 Flyway를 돌리고 `validate`로 엔티티와 SQL의 일치를 검증한다 (Docker 불필요)
 - 테스트 메서드 이름은 한글 문장 (`과정_목록은_로그인_없이_...`)
 
@@ -39,8 +39,8 @@ Spring Boot 4.1.2 · Java 21 · Gradle Kotlin DSL. 기본 패키지는 `com.eduh
 
 - `Course`(분류·상태) 1:N `CourseSession`(일정·장소·정원·확정 인원) 1:N `Enrollment`. 수강 신청 단위는 회차 (D-17), (임직원, 회차) 유니크
 - 남은 자리 = 정원 − `confirmedCount` (D-21). 신청·취소 로직은 이 값을 함께 바꾼다. 대기 순번은 WAITING 중 `appliedAt` 순서
-- 역할은 `EMPLOYEE`, `ADMIN` (D-14). `POST /api/auth/login`이 HS256 JWT(`role` 클레임)를 발급하고 리소스 서버가 검증한다
-- `SecurityConfig`: 로그인·Swagger·`GET /api/courses/**` 공개 (D-22), `/api/admin/**`은 ADMIN, 나머지는 인증 필요. 비밀번호는 BCrypt로만 저장
+- 역할은 `EMPLOYEE`, `ADMIN` (D-14). `POST /api/v1/auth/login`이 HS256 JWT(`role` 클레임)를 발급하고 리소스 서버가 검증한다
+- `SecurityConfig`: API는 `/api/v1` 아래 (D-24). 로그인·Swagger·`GET /api/v1/courses/**` 공개 (D-22), 그 밖의 `/api/v1/courses/**`·`/api/v1/sessions/**`는 ADMIN, 나머지는 인증 필요. 비밀번호는 BCrypt로만 저장
 
 ## OpenAPI 규칙
 
