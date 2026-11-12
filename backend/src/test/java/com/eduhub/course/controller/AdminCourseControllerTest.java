@@ -37,14 +37,14 @@ class AdminCourseControllerTest {
 
 	@Test
 	void 토큰_없이_관리자_API를_부르면_401() throws Exception {
-		mockMvc.perform(post("/api/admin/courses").contentType(MediaType.APPLICATION_JSON).content(COURSE_JSON))
+		mockMvc.perform(post("/api/v1/courses").contentType(MediaType.APPLICATION_JSON).content(COURSE_JSON))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.code").value("G002"));
 	}
 
 	@Test
 	void 잘못된_토큰이면_401() throws Exception {
-		mockMvc.perform(post("/api/admin/courses")
+		mockMvc.perform(post("/api/v1/courses")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer not-a-jwt")
 						.contentType(MediaType.APPLICATION_JSON).content(COURSE_JSON))
 				.andExpect(status().isUnauthorized())
@@ -55,7 +55,7 @@ class AdminCourseControllerTest {
 	void 임직원_토큰으로_관리자_API를_부르면_403() throws Exception {
 		String token = login("employee@eduhub.local", "local-employee-only");
 
-		mockMvc.perform(post("/api/admin/courses")
+		mockMvc.perform(post("/api/v1/courses")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON).content(COURSE_JSON))
 				.andExpect(status().isForbidden())
@@ -64,7 +64,7 @@ class AdminCourseControllerTest {
 
 	@Test
 	void 비밀번호가_틀리면_로그인_실패_401() throws Exception {
-		mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+		mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
 						.content("{\"email\": \"admin@eduhub.local\", \"password\": \"wrong\"}"))
 				.andExpect(status().isUnauthorized())
 				.andExpect(jsonPath("$.code").value("A001"));
@@ -75,14 +75,14 @@ class AdminCourseControllerTest {
 		String token = adminToken();
 		long courseId = createCourse(token);
 
-		mockMvc.perform(post("/api/admin/courses/{id}/sessions", courseId)
+		mockMvc.perform(post("/api/v1/courses/{id}/sessions", courseId)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON).content(SESSION_JSON))
 				.andExpect(status().isCreated())
 				.andExpect(jsonPath("$.sessionNo").value(1))
 				.andExpect(jsonPath("$.remainingSeats").value(2));
 
-		mockMvc.perform(get("/api/courses/{id}", courseId))
+		mockMvc.perform(get("/api/v1/courses/{id}", courseId))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.title").value("테스트 자동화"))
 				.andExpect(jsonPath("$.sessions[0].location").value("본사 5층"));
@@ -93,18 +93,18 @@ class AdminCourseControllerTest {
 		String token = adminToken();
 		long courseId = createCourse(token);
 
-		mockMvc.perform(put("/api/admin/courses/{id}", courseId)
+		mockMvc.perform(put("/api/v1/courses/{id}", courseId)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"title\": \"테스트 자동화 심화\", \"category\": \"개발\"}"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.title").value("테스트 자동화 심화"));
 
-		mockMvc.perform(post("/api/admin/courses/{id}/close", courseId)
+		mockMvc.perform(post("/api/v1/courses/{id}/close", courseId)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
 				.andExpect(status().isNoContent());
 
-		mockMvc.perform(put("/api/admin/courses/{id}", courseId)
+		mockMvc.perform(put("/api/v1/courses/{id}", courseId)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON).content(COURSE_JSON))
 				.andExpect(status().isConflict())
@@ -113,7 +113,7 @@ class AdminCourseControllerTest {
 
 	@Test
 	void 필수값이_없으면_400() throws Exception {
-		mockMvc.perform(post("/api/admin/courses")
+		mockMvc.perform(post("/api/v1/courses")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken())
 						.contentType(MediaType.APPLICATION_JSON).content("{\"title\": \"\"}"))
 				.andExpect(status().isBadRequest())
@@ -125,7 +125,7 @@ class AdminCourseControllerTest {
 	}
 
 	private String login(String email, String password) throws Exception {
-		String body = mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+		String body = mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
 						.content("{\"email\": \"%s\", \"password\": \"%s\"}".formatted(email, password)))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.tokenType").value("Bearer"))
@@ -134,7 +134,7 @@ class AdminCourseControllerTest {
 	}
 
 	private long createCourse(String token) throws Exception {
-		String body = mockMvc.perform(post("/api/admin/courses")
+		String body = mockMvc.perform(post("/api/v1/courses")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
 						.contentType(MediaType.APPLICATION_JSON).content(COURSE_JSON))
 				.andExpect(status().isCreated())

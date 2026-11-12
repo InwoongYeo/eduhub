@@ -13,7 +13,7 @@ import java.util.Optional;
 import com.eduhub.course.domain.Course;
 import com.eduhub.course.domain.CourseSession;
 import com.eduhub.course.dto.CourseDetailResponse;
-import com.eduhub.course.dto.CourseResponse;
+import com.eduhub.course.dto.CourseSummaryResponse;
 import com.eduhub.course.repository.CourseRepository;
 import com.eduhub.course.repository.CourseSessionRepository;
 import com.eduhub.global.error.BusinessException;
@@ -49,11 +49,13 @@ class CourseServiceTest {
 		Pageable pageable = PageRequest.of(0, 10);
 		given(courseRepository.findAll(any(Specification.class), eq(pageable)))
 				.willReturn(new PageImpl<>(List.of(course), pageable, 1));
+		given(courseSessionRepository.countByCourseIds(any())).willReturn(List.of());
 
-		Page<CourseResponse> result = courseService.getCourses("자바", "개발", pageable);
+		Page<CourseSummaryResponse> result = courseService.getCourses("자바", "개발", pageable);
 
 		assertThat(result.getTotalElements()).isEqualTo(1);
 		assertThat(result.getContent().get(0).category()).isEqualTo("개발");
+		assertThat(result.getContent().get(0).sessionCount()).isZero();
 	}
 
 	@Test
