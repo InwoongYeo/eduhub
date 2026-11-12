@@ -37,3 +37,12 @@ test('API 호출이 실패하면 error를 돌려준다', async () => {
   expect(result.current.error).toBeInstanceOf(Error);
   expect(result.current.data).toBeUndefined();
 });
+
+test('화면 페이지 0을 요청하면 API에 page=0을 그대로 보낸다 (첫 페이지 누락 버그 재현)', async () => {
+  getCourses.mockResolvedValue(pageOf(['자바 기초']));
+
+  const { result } = renderHook(() => useCourses({ keyword: '', page: 0, size: 10 }));
+
+  await waitFor(() => expect(result.current.loading).toBe(false));
+  expect(getCourses).toHaveBeenCalledWith(undefined, undefined, 0, 10);
+});
