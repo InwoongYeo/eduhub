@@ -59,6 +59,41 @@ class CourseSessionTest {
 	}
 
 	@Test
+	void 시작_1분_전까지는_취소할_수_있다() {
+		assertThatCode(() -> session(1).checkCancellable(STARTS_AT.minusMinutes(1))).doesNotThrowAnyException();
+	}
+
+	@Test
+	void 시작_시각과_같으면_취소_기간_종료_E006이다() {
+		assertErrorCode(() -> session(1).checkCancellable(STARTS_AT), ErrorCode.CANCEL_PERIOD_ENDED);
+	}
+
+	@Test
+	void 시작_이후이면_취소_기간_종료_E006이다() {
+		assertErrorCode(() -> session(1).checkCancellable(STARTS_AT.plusMinutes(1)), ErrorCode.CANCEL_PERIOD_ENDED);
+	}
+
+	@Test
+	void 종료된_회차는_시작_전이어도_취소_기간_종료_E006이다() {
+		CourseSession session = session(1);
+		session.close();
+
+		assertErrorCode(() -> session.checkCancellable(STARTS_AT.minusMinutes(1)), ErrorCode.CANCEL_PERIOD_ENDED);
+	}
+
+	@Test
+	void 자리를_반환하면_확정_인원이_1_줄고_0이면_예외이다() {
+		CourseSession session = session(2);
+		session.reserveSeat();
+
+		session.releaseSeat();
+
+		assertThat(session.getConfirmedCount()).isZero();
+		assertThatThrownBy(session::releaseSeat).isInstanceOf(IllegalStateException.class);
+		assertThat(session.getConfirmedCount()).isZero();
+	}
+
+	@Test
 	void 종료되고_시작도_지났으면_E002가_먼저다() {
 		CourseSession session = session(1);
 		session.close();

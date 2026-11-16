@@ -5,6 +5,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Locale;
+import java.util.Optional;
 
 import com.eduhub.course.domain.CourseSession;
 import com.eduhub.course.repository.CourseSessionRepository;
@@ -96,6 +97,34 @@ public class EnrollmentService {
 		// 잠금 뒤 첫 일반 읽기에서 만들어져야 countWaitingAhead가 앞선 신청의 커밋을 본다. 어기면 대기 순번이
 		// 중복된다 (D-36). EnrollmentConcurrencyTest N1·N2·N7이 이 회귀를 잡는다.
 		return EnrollmentResponse.of(saved, saved.getStatus() == EnrollmentStatus.WAITING ? waitingNoOf(saved) : null);
+	}
+
+	/**
+	 * 내 신청을 취소한다 (FR-06). 확정이던 신청이면 대기 1순위를 확정으로 승급하고(확정 인원 그대로),
+	 * 대기자가 없으면 확정 인원을 1 줄인다. 대기 신청 취소는 확정 인원을 바꾸지 않는다.
+	 * 판정 순서: C002, E004, E006, E005.
+	 * 첫 쿼리는 반드시 회차 잠금(findByIdForUpdate)이다. 그 앞에 일반 SELECT를 두지 않는다 (D-36 스냅숏 전제).
+	 */
+	@Transactional
+	public EnrollmentResponse cancel(Long sessionId, Long employeeId) {
+		CourseSession session = courseSessionRepository.findByIdForUpdate(sessionId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
+		Enrollment mine = enrollmentRepository.findBySessionIdAndEmployeeId(sessionId, employeeId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.ENROLLMENT_NOT_FOUND));
+		session.checkCancellable(LocalDateTime.now(clock));
+
+		boolean wasConfirmed = mine.isConfirmed();
+		mine.cancel();
+		if (wasConfirmed) {
+			Optional<Enrollment> next = enrollmentRepository
+					.findFirstBySessionIdAndStatusOrderByAppliedAtAscIdAsc(sessionId, EnrollmentStatus.WAITING);
+			if (next.isPresent()) {
+				next.get().promote();
+			} else {
+				session.releaseSeat();
+			}
+		}
+		return EnrollmentResponse.of(enrollmentRepository.saveAndFlush(mine), null);
 	}
 
 	/** 내 신청 상태. 대기 중이면 지금 시점의 순번을 함께 돌려준다 (FR-05). 신청자는 토큰의 subject만 쓴다. */

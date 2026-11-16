@@ -17,6 +17,9 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 	/** 회차의 특정 상태 신청 수. */
 	long countBySessionIdAndStatus(Long sessionId, EnrollmentStatus status);
 
+	/** 승급 대상: 같은 회차 대기자 중 appliedAt, id 오름차순 첫 행. 대기 순번(D-36)과 같은 정렬이다 (FR-06). */
+	Optional<Enrollment> findFirstBySessionIdAndStatusOrderByAppliedAtAscIdAsc(Long sessionId, EnrollmentStatus status);
+
 	/** 같은 회차에서 나보다 앞선 대기자 수 (appliedAt, id 순). waitingNo = 이 값 + 1 (FR-05) */
 	@Query("""
 			select count(e) from Enrollment e

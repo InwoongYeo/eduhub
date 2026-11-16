@@ -6,6 +6,8 @@ import static org.assertj.core.api.Assertions.fail;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.Callable;
@@ -366,5 +368,126 @@ class EnrollmentConcurrencyTest {
 				Enrollment.create(employee, session, EnrollmentStatus.CONFIRMED)))
 				.isInstanceOfSatisfying(DataIntegrityViolationException.class,
 						e -> assertThat(EnrollmentService.isDuplicateEnrollment(e)).isTrue());
+	}
+
+	/** 앞 번호 임직원부터 순서대로 신청시켜 (임직원 id -> 신청 응답)을 기록한다. 순번 기대값 계산의 기준이다. */
+	private Map<Long, EnrollmentResponse> enrollInOrder(Long sessionId, int count) {
+		Map<Long, EnrollmentResponse> applied = new LinkedHashMap<>();
+		for (int i = 0; i < count; i++) {
+			Long userId = userIds.get(i);
+			applied.put(userId, enrollmentService.enroll(sessionId, userId));
+		}
+		return applied;
+	}
+
+	private List<Long> employeeIdsWith(Long sessionId, EnrollmentStatus status) {
+		return jdbcTemplate.queryForList(
+				"SELECT employee_id FROM enrollment WHERE session_id = ? AND status = ? ORDER BY employee_id",
+				Long.class, sessionId, status.name());
+	}
+
+	/** 지금 WAITING인 임직원 전원의 내 상태 조회 순번을 오름차순으로 모은다. */
+	private List<Integer> currentWaitingNos(Long sessionId) {
+		return employeeIdsWith(sessionId, EnrollmentStatus.WAITING).stream()
+				.map(userId -> enrollmentService.findMine(sessionId, userId).waitingNo())
+				.sorted()
+				.toList();
+	}
+
+	private List<Long> idsWithStatus(Map<Long, EnrollmentResponse> applied, EnrollmentStatus status) {
+		return applied.entrySet().stream()
+				.filter(e -> e.getValue().status() == status)
+				.map(Map.Entry::getKey)
+				.toList();
+	}
+
+	private List<Callable<EnrollmentResponse>> cancelTasks(Long sessionId, List<Long> employeeIds) {
+		List<Callable<EnrollmentResponse>> tasks = new ArrayList<>();
+		for (Long userId : employeeIds) {
+			tasks.add(() -> enrollmentService.cancel(sessionId, userId));
+		}
+		return tasks;
+	}
+
+	@Test
+	@DisplayName("C1: 정원 10 가득에 대기 20일 때 확정자 10명이 동시에 취소하면 대기 순번 1~10이던 사람이 승급된다")
+	void 확정자_10명이_동시에_취소하면_대기_1순위부터_10명이_승급된다() throws Exception {
+		Long sessionId = createSession(10);
+		Map<Long, EnrollmentResponse> applied = enrollInOrder(sessionId, 30);
+		List<Long> confirmedBefore = idsWithStatus(applied, EnrollmentStatus.CONFIRMED);
+		// 준비 단계에서 기록한 신청 응답의 순번 1~10인 대기자
+		List<Long> firstTenWaiting = applied.entrySet().stream()
+				.filter(e -> e.getValue().status() == EnrollmentStatus.WAITING && e.getValue().waitingNo() <= 10)
+				.map(Map.Entry::getKey)
+				.sorted()
+				.toList();
+		assertThat(confirmedBefore).hasSize(10);
+		assertThat(firstTenWaiting).hasSize(10);
+
+		List<Object> results = runConcurrently(cancelTasks(sessionId, confirmedBefore));
+
+		assertThat(results.stream().filter(r -> r instanceof Throwable).count()).isZero();
+		assertThat(dbCountOf(sessionId, EnrollmentStatus.CONFIRMED)).isEqualTo(10);
+		assertThat(confirmedCountOf(sessionId)).isEqualTo(10);
+		assertThat(employeeIdsWith(sessionId, EnrollmentStatus.CONFIRMED)).containsExactlyElementsOf(firstTenWaiting);
+		assertThat(dbCountOf(sessionId, EnrollmentStatus.CANCELLED)).isEqualTo(10);
+		assertThat(currentWaitingNos(sessionId)).containsExactlyElementsOf(rangeClosed(1, 10));
+	}
+
+	@Test
+	@DisplayName("C2: 정원 5 가득에 대기 5일 때 확정자 5명 취소와 새 임직원 10명 신청이 동시에 실행돼도 확정 5이고 대기 순번이 연속이다")
+	void 취소와_신규_신청이_동시에_실행돼도_정원과_대기_순번이_유지된다() throws Exception {
+		Long sessionId = createSession(5);
+		Map<Long, EnrollmentResponse> applied = enrollInOrder(sessionId, 10);
+		List<Long> confirmedBefore = idsWithStatus(applied, EnrollmentStatus.CONFIRMED);
+		assertThat(confirmedBefore).hasSize(5);
+		List<Callable<EnrollmentResponse>> tasks = new ArrayList<>(cancelTasks(sessionId, confirmedBefore));
+		for (int i = 10; i < 20; i++) {
+			Long userId = userIds.get(i);
+			tasks.add(() -> enrollmentService.enroll(sessionId, userId));
+		}
+
+		List<Object> results = runConcurrently(tasks);
+
+		assertThat(results.stream().filter(r -> r instanceof Throwable).count()).isZero();
+		assertThat(dbCountOf(sessionId, EnrollmentStatus.CONFIRMED)).isEqualTo(5);
+		assertThat(confirmedCountOf(sessionId)).isEqualTo(5);
+		// 대기 5 + 신규 10 - 승급 5 = 10
+		int waiting = dbCountOf(sessionId, EnrollmentStatus.WAITING);
+		assertThat(waiting).isEqualTo(10);
+		assertThat(currentWaitingNos(sessionId)).containsExactlyElementsOf(rangeClosed(1, waiting));
+	}
+
+	@Test
+	@DisplayName("C3: 대기자 없이 확정 10명이 동시에 취소하면 확정 인원이 0이다")
+	void 대기자_없이_확정_10명이_동시에_취소하면_확정_인원이_0이다() throws Exception {
+		Long sessionId = createSession(10);
+		enrollInOrder(sessionId, 10);
+
+		List<Object> results = runConcurrently(cancelTasks(sessionId, userIds.subList(0, 10)));
+
+		assertThat(results.stream().filter(r -> r instanceof Throwable).count()).isZero();
+		assertThat(confirmedCountOf(sessionId)).isZero();
+		assertThat(dbCountOf(sessionId, EnrollmentStatus.CONFIRMED)).isZero();
+		assertThat(dbCountOf(sessionId, EnrollmentStatus.CANCELLED)).isEqualTo(10);
+	}
+
+	@Test
+	@DisplayName("C4: 같은 사람이 같은 신청을 10번 동시에 취소하면 1건만 성공하고 9건은 E005이며 확정 인원은 0이다")
+	void 같은_신청을_10번_동시에_취소하면_1건만_성공한다() throws Exception {
+		Long sessionId = createSession(10);
+		Long userId = userIds.get(0);
+		enrollmentService.enroll(sessionId, userId);
+
+		List<Object> results = runConcurrently(cancelTasks(sessionId, Collections.nCopies(10, userId)));
+
+		assertThat(results.stream().filter(r -> r instanceof EnrollmentResponse).count()).isEqualTo(1);
+		assertThat(results.stream().filter(r -> r instanceof Throwable).toList()).hasSize(9)
+				.allSatisfy(t -> {
+					assertThat(t).isInstanceOf(BusinessException.class);
+					assertThat(((BusinessException) t).getErrorCode()).isEqualTo(ErrorCode.CANCEL_NOT_ALLOWED);
+				});
+		assertThat(confirmedCountOf(sessionId)).isZero();
+		assertThat(dbCountOf(sessionId, EnrollmentStatus.CANCELLED)).isEqualTo(1);
 	}
 }

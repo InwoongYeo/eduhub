@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.util.Optional;
 
 import com.eduhub.course.domain.Course;
 import com.eduhub.course.domain.CourseSession;
@@ -161,6 +162,69 @@ class EnrollmentRepositoryTest {
 		em.clear();
 
 		assertThat(ahead(mine)).isZero();
+	}
+
+	private Optional<Enrollment> nextToPromote(CourseSession session) {
+		return enrollmentRepository.findFirstBySessionIdAndStatusOrderByAppliedAtAscIdAsc(
+				session.getId(), EnrollmentStatus.WAITING);
+	}
+
+	@Test
+	void 승급_대상은_신청_시각이_가장_이른_대기자이다() {
+		Course course = courseRepository.save(Course.create("자바 기초", "입문", "개발"));
+		CourseSession s1 = session(course, 1);
+		Instant t = Instant.parse("2026-11-16T01:00:00Z");
+		enrollment(user("a@eduhub.local"), s1, EnrollmentStatus.WAITING, t.plusSeconds(2));
+		Enrollment earliest = enrollment(user("b@eduhub.local"), s1, EnrollmentStatus.WAITING, t);
+		enrollment(user("c@eduhub.local"), s1, EnrollmentStatus.WAITING, t.plusSeconds(1));
+		em.flush();
+		em.clear();
+
+		assertThat(nextToPromote(s1)).get().extracting(Enrollment::getId).isEqualTo(earliest.getId());
+	}
+
+	@Test
+	void 승급_대상은_같은_시각이면_id가_작은_쪽이다() {
+		Course course = courseRepository.save(Course.create("자바 기초", "입문", "개발"));
+		CourseSession s1 = session(course, 1);
+		Instant t = Instant.parse("2026-11-16T01:00:00Z");
+		Enrollment first = enrollment(user("a@eduhub.local"), s1, EnrollmentStatus.WAITING, t);
+		enrollment(user("b@eduhub.local"), s1, EnrollmentStatus.WAITING, t);
+		em.flush();
+		em.clear();
+
+		assertThat(nextToPromote(s1)).get().extracting(Enrollment::getId).isEqualTo(first.getId());
+	}
+
+	@Test
+	void 승급_대상에서_재신청_행은_id가_작아도_신청_시각이_늦으면_뒤다() {
+		Course course = courseRepository.save(Course.create("자바 기초", "입문", "개발"));
+		CourseSession s1 = session(course, 1);
+		Instant t = Instant.parse("2026-11-16T01:00:00Z");
+		Enrollment reapplied = enrollment(user("a@eduhub.local"), s1, EnrollmentStatus.CANCELLED, t);
+		Enrollment w1 = enrollment(user("b@eduhub.local"), s1, EnrollmentStatus.WAITING, t.plusSeconds(1));
+		reapplied.reapply(false, t.plusSeconds(3));
+		em.flush();
+		em.clear();
+
+		assertThat(reapplied.getId()).isLessThan(w1.getId());
+		assertThat(nextToPromote(s1)).get().extracting(Enrollment::getId).isEqualTo(w1.getId());
+	}
+
+	@Test
+	void 승급_대상에서_확정과_다른_회차는_제외하고_대기가_없으면_비어_있다() {
+		Course course = courseRepository.save(Course.create("자바 기초", "입문", "개발"));
+		CourseSession s1 = session(course, 1);
+		CourseSession s2 = session(course, 2);
+		Instant t = Instant.parse("2026-11-16T01:00:00Z");
+		enrollment(user("a@eduhub.local"), s1, EnrollmentStatus.CONFIRMED, t);
+		enrollment(user("b@eduhub.local"), s1, EnrollmentStatus.CANCELLED, t.plusSeconds(1));
+		Enrollment other = enrollment(user("c@eduhub.local"), s2, EnrollmentStatus.WAITING, t.plusSeconds(2));
+		em.flush();
+		em.clear();
+
+		assertThat(nextToPromote(s1)).isEmpty();
+		assertThat(nextToPromote(s2)).get().extracting(Enrollment::getId).isEqualTo(other.getId());
 	}
 
 	@Test

@@ -24,7 +24,7 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * 임직원의 회차 수강 신청 (D-17). 임직원·회차 쌍당 한 행이라 같은 회차에 중복 신청할 수 없다 (FR-04).
- * 신청·대기 규칙(FR-04)은 apply·reapply로 구현했고, 취소·승급(FR-06)은 아직 없다.
+ * 신청·대기 규칙(FR-04)은 apply·reapply로, 취소·승급(FR-06)은 cancel·promote로 구현했다.
  */
 @Entity
 @Table(name = "enrollment",
@@ -90,6 +90,30 @@ public class Enrollment {
 		}
 		this.status = confirmed ? EnrollmentStatus.CONFIRMED : EnrollmentStatus.WAITING;
 		this.appliedAt = now;
+	}
+
+	/**
+	 * 신청을 취소한다 (FR-06). CONFIRMED·WAITING만 CANCELLED로 바꾸고, 그 밖은 취소할 수 없다 (E005).
+	 */
+	public void cancel() {
+		if (status != EnrollmentStatus.CONFIRMED && status != EnrollmentStatus.WAITING) {
+			throw new BusinessException(ErrorCode.CANCEL_NOT_ALLOWED);
+		}
+		this.status = EnrollmentStatus.CANCELLED;
+	}
+
+	public boolean isConfirmed() {
+		return status == EnrollmentStatus.CONFIRMED;
+	}
+
+	/**
+	 * 대기자를 확정으로 승급한다 (FR-06). appliedAt은 바꾸지 않는다. WAITING이 아니면 서비스의 버그다.
+	 */
+	public void promote() {
+		if (status != EnrollmentStatus.WAITING) {
+			throw new IllegalStateException("대기 상태가 아닌 신청은 승급할 수 없습니다: " + status);
+		}
+		this.status = EnrollmentStatus.CONFIRMED;
 	}
 
 	public Long getId() {

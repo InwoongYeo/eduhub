@@ -29,7 +29,9 @@ public enum ErrorCode {
 	DUPLICATE_ENROLLMENT(HttpStatus.CONFLICT, "E001", "이미 신청한 회차입니다."),
 	SESSION_NOT_OPEN(HttpStatus.CONFLICT, "E002", "종료된 회차에는 신청할 수 없습니다."),
 	ENROLLMENT_PERIOD_ENDED(HttpStatus.CONFLICT, "E003", "신청 기간이 지난 회차입니다."),
-	ENROLLMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "E004", "신청 내역이 없습니다.");
+	ENROLLMENT_NOT_FOUND(HttpStatus.NOT_FOUND, "E004", "신청 내역이 없습니다."),
+	CANCEL_NOT_ALLOWED(HttpStatus.CONFLICT, "E005", "취소할 수 없는 신청입니다."),
+	CANCEL_PERIOD_ENDED(HttpStatus.CONFLICT, "E006", "취소 기간이 지난 회차입니다.");
 
 	private final HttpStatus status;
 	private final String code;

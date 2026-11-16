@@ -52,6 +52,24 @@ public class EnrollmentController {
 		return enrollmentService.enroll(sessionId, Long.valueOf(jwt.getSubject()));
 	}
 
+	@Operation(summary = "내 신청 취소",
+			description = "토큰 사용자의 해당 회차 신청을 취소한다. 확정 신청을 취소하면 대기 1순위가 자동 확정된다. 회차 시작 전까지만 취소할 수 있다")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "취소 완료 (status = CANCELLED)"),
+			@ApiResponse(responseCode = "401", description = "인증 실패",
+					content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "403", description = "임직원이 아님",
+					content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "404", description = "회차가 없거나 신청 내역이 없음",
+					content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "409", description = "이미 취소·수료된 신청이거나 취소 기간이 지난 회차",
+					content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	})
+	@PostMapping("/sessions/{sessionId}/enrollments/me/cancel")
+	public EnrollmentResponse cancel(@PathVariable Long sessionId, @AuthenticationPrincipal Jwt jwt) {
+		return enrollmentService.cancel(sessionId, Long.valueOf(jwt.getSubject()));
+	}
+
 	@Operation(summary = "내 신청 상태 조회",
 			description = "토큰 사용자의 해당 회차 신청 상태를 돌려준다. 대기 중이면 현재 대기 순번(waitingNo)을 함께 돌려준다")
 	@ApiResponses({
