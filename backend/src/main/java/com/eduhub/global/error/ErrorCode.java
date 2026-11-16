@@ -23,7 +23,12 @@ public enum ErrorCode {
 	COURSE_CLOSED(HttpStatus.CONFLICT, "C003", "종료된 교육과정은 변경할 수 없습니다."),
 	SESSION_CLOSED(HttpStatus.CONFLICT, "C004", "종료된 회차는 변경할 수 없습니다."),
 	CAPACITY_BELOW_CONFIRMED(HttpStatus.CONFLICT, "C005", "정원은 이미 확정된 인원보다 적을 수 없습니다."),
-	INVALID_SESSION_TIME(HttpStatus.BAD_REQUEST, "C006", "회차 종료 시각은 시작 시각보다 뒤여야 합니다.");
+	INVALID_SESSION_TIME(HttpStatus.BAD_REQUEST, "C006", "회차 종료 시각은 시작 시각보다 뒤여야 합니다."),
+
+	// 수강 신청
+	DUPLICATE_ENROLLMENT(HttpStatus.CONFLICT, "E001", "이미 신청한 회차입니다."),
+	SESSION_NOT_OPEN(HttpStatus.CONFLICT, "E002", "종료된 회차에는 신청할 수 없습니다."),
+	ENROLLMENT_PERIOD_ENDED(HttpStatus.CONFLICT, "E003", "신청 기간이 지난 회차입니다.");
 
 	private final HttpStatus status;
 	private final String code;

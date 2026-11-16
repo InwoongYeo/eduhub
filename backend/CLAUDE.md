@@ -10,6 +10,7 @@ Spring Boot 4.1.2 · Java 21 · Gradle Kotlin DSL. 기본 패키지는 `com.eduh
 - 메서드 하나: `./gradlew test --tests "com.eduhub.course.service.CourseAdminServiceTest.메서드명"`
 - 서비스: Mockito 단위 테스트. 컨트롤러: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional`(테스트마다 롤백)
 - 컨트롤러 테스트는 `local` 초기 데이터(`LocalDataInitializer`: 과정 3개, 관리자·임직원 계정)에 의존하고, 관리자 API는 `/api/v1/auth/login`으로 받은 실제 토큰을 쓴다
+- `EnrollmentConcurrencyTest`는 Testcontainers MySQL을 쓰므로 Docker가 실행 중이어야 한다. Docker가 없으면 실패한다(건너뛰지 않음, 설계 Q2)
 - `SchemaMappingTest`: H2에서 Flyway를 돌리고 `validate`로 엔티티와 SQL의 일치를 검증한다 (Docker 불필요)
 - 테스트 메서드 이름은 한글 문장 (`과정_목록은_로그인_없이_...`)
 
@@ -19,7 +20,7 @@ Spring Boot 4.1.2 · Java 21 · Gradle Kotlin DSL. 기본 패키지는 `com.eduh
 - 호출 방향은 controller → service → repository. `enrollment`가 `course`를 참조하므로 `course`는 `enrollment`를 참조하지 않는다
 - 서비스 클래스에 `@Transactional(readOnly = true)`, 쓰기 메서드에만 `@Transactional`. 조회(`CourseService`)와 관리자 변경(`CourseAdminService`)을 나눈다
 - 목록 API는 `Pageable`을 받아 `PageResponse.from(page)`로 반환 (기본 10, 최대 100)
-- 오류는 `BusinessException(ErrorCode.X)`로 던지고, 새 오류는 `ErrorCode`에 추가한다(접두어: 공통 `G`, 인증 `A`, 과정·회차 `C`). `GlobalExceptionHandler`와 `SecurityConfig`가 `{code, message, timestamp}`로 응답한다
+- 오류는 `BusinessException(ErrorCode.X)`로 던지고, 새 오류는 `ErrorCode`에 추가한다(접두어: 공통 `G`, 인증 `A`, 과정·회차 `C`, 수강 신청 `E`). `GlobalExceptionHandler`와 `SecurityConfig`가 `{code, message, timestamp}`로 응답한다
 
 ## JPA 규칙
 

@@ -1,10 +1,21 @@
 import { useState } from 'react';
 import {
-  Alert, CircularProgress, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow, TextField,
+  Alert, Chip, CircularProgress, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow,
+  TextField,
 } from '@mui/material';
 import { useCourses } from '../hooks/useCourses';
 
 const PAGE_SIZE = 10;
+
+/** 분류 선택 목록. 분류는 정확히 일치로 검색한다 (D-18). 빈 값은 전체. */
+export const CATEGORIES = ['개발', '데이터', '리더십', '직무공통'];
+
+/** 과정 상태 표시 (CourseStatus: OPEN, CLOSED) */
+function StatusChip({ status }: { status: string }) {
+  return status === 'OPEN'
+    ? <Chip label="운영중" color="success" size="small" />
+    : <Chip label="종료" size="small" />;
+}
 
 /** 과정 목록 화면 (FR-01). 데이터는 useCourses 훅에서만 받고, API를 직접 부르지 않는다. */
 export function CourseListPage() {
@@ -27,13 +38,20 @@ export function CourseListPage() {
           }}
         />
         <TextField
+          select
           label="분류"
           value={category}
           onChange={(e) => {
             setCategory(e.target.value);
             setPage(0);
           }}
-        />
+          sx={{ minWidth: 160 }}
+        >
+          <MenuItem value="">전체</MenuItem>
+          {CATEGORIES.map((c) => (
+            <MenuItem key={c} value={c}>{c}</MenuItem>
+          ))}
+        </TextField>
       </Stack>
       {loading ? (
         <CircularProgress />
@@ -43,6 +61,7 @@ export function CourseListPage() {
             <TableRow>
               <TableCell>과정명</TableCell>
               <TableCell>분류</TableCell>
+              <TableCell>상태</TableCell>
               <TableCell>회차 수</TableCell>
             </TableRow>
           </TableHead>
@@ -51,6 +70,7 @@ export function CourseListPage() {
               <TableRow key={c.id}>
                 <TableCell>{c.title}</TableCell>
                 <TableCell>{c.category}</TableCell>
+                <TableCell><StatusChip status={c.status} /></TableCell>
                 <TableCell>{c.sessionCount}</TableCell>
               </TableRow>
             ))}

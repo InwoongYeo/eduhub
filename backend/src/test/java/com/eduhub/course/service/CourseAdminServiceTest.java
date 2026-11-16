@@ -62,7 +62,7 @@ class CourseAdminServiceTest {
 		CourseSession s1 = CourseSession.create(course, 1, start, start.plusHours(8), "본사", 30);
 		CourseSession s2 = CourseSession.create(course, 2, start.plusDays(7), start.plusDays(7).plusHours(8), "본사", 30);
 		given(courseRepository.findById(1L)).willReturn(Optional.of(course));
-		given(courseSessionRepository.findByCourseIdOrderBySessionNoAsc(1L)).willReturn(List.of(s1, s2));
+		given(courseSessionRepository.findByCourseIdForUpdate(1L)).willReturn(List.of(s1, s2));
 
 		courseAdminService.closeCourse(1L);
 
@@ -87,7 +87,7 @@ class CourseAdminServiceTest {
 		CourseSession session = CourseSession.create(Course.create("자바 기초", "입문", "개발"),
 				1, start, start.plusHours(8), "본사", 30);
 		session.close();
-		given(courseSessionRepository.findById(1L)).willReturn(Optional.of(session));
+		given(courseSessionRepository.findByIdForUpdate(1L)).willReturn(Optional.of(session));
 
 		assertErrorCode(() -> courseAdminService.updateSession(1L, new SessionRequest(start, start.plusHours(8), "본사", 40)),
 				ErrorCode.SESSION_CLOSED);
@@ -104,7 +104,7 @@ class CourseAdminServiceTest {
 
 	@Test
 	void 없는_회차를_수정하면_SESSION_NOT_FOUND_예외가_난다() {
-		given(courseSessionRepository.findById(9L)).willReturn(Optional.empty());
+		given(courseSessionRepository.findByIdForUpdate(9L)).willReturn(Optional.empty());
 
 		assertErrorCode(() -> courseAdminService.updateSession(9L, new SessionRequest(start, start.plusHours(8), "본사", 30)),
 				ErrorCode.SESSION_NOT_FOUND);
