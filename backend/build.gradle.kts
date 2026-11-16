@@ -2,6 +2,7 @@ plugins {
 	java
 	id("org.springframework.boot") version "4.1.2"
 	id("io.spring.dependency-management") version "1.1.7"
+	id("com.diffplug.spotless") version "8.11.0"
 }
 
 group = "com.eduhub"
@@ -41,4 +42,20 @@ dependencies {
 
 tasks.withType<Test> {
 	useJUnitPlatform()
+}
+
+// 코드 포맷 검사 (2회차 1주차 범위, D-34). 기존 스타일(탭 들여쓰기)을 바꾸지 않는 최소 규칙만 둔다.
+// 고치기: ./gradlew spotlessApply, 검사: ./gradlew spotlessCheck (./gradlew build의 check에 포함)
+spotless {
+	java {
+		target("src/*/java/**/*.java")
+		removeUnusedImports()
+		trimTrailingWhitespace()
+		endWithNewline()
+	}
+	kotlinGradle {
+		target("*.gradle.kts")
+		trimTrailingWhitespace()
+		endWithNewline()
+	}
 }

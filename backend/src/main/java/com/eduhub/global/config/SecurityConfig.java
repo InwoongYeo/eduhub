@@ -56,6 +56,8 @@ public class SecurityConfig {
 						.requestMatchers("/error").permitAll()
 						.requestMatchers(SWAGGER_PATHS).permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
+						// 서버 상태 확인은 로그인 없이 (D-33)
+						.requestMatchers(HttpMethod.GET, "/api/v1/health").permitAll()
 						// FR-01·02: 과정 조회는 로그인 없이 (D-22)
 						.requestMatchers(HttpMethod.GET, "/api/v1/courses", "/api/v1/courses/**").permitAll()
 						// FR-04: 회차 수강 신청은 임직원만 (D-28, D-29)

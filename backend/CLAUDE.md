@@ -5,6 +5,7 @@ Spring Boot 4.1.2 · Java 21 · Gradle Kotlin DSL. 기본 패키지는 `com.eduh
 ## 테스트 명령 (`backend/`에서)
 
 - 전체: `./gradlew test`
+- 포맷: 커밋 전에 `./gradlew spotlessApply` (검사만 `./gradlew spotlessCheck`, D-34)
 - 클래스 하나: `./gradlew test --tests "com.eduhub.course.service.CourseAdminServiceTest"`
 - 메서드 하나: `./gradlew test --tests "com.eduhub.course.service.CourseAdminServiceTest.메서드명"`
 - 서비스: Mockito 단위 테스트. 컨트롤러: `@SpringBootTest` + `@AutoConfigureMockMvc` + `@Transactional`(테스트마다 롤백)
@@ -15,7 +16,7 @@ Spring Boot 4.1.2 · Java 21 · Gradle Kotlin DSL. 기본 패키지는 `com.eduh
 
 ## 계층 규칙
 
-- 도메인별 패키지 `user`, `course`, `enrollment`, 각각 `controller`/`service`/`repository`/`domain`/`dto`. 공통은 `global.config`, `global.security`, `global.error`, `global.common`, `global.init`
+- 도메인별 패키지 `user`, `course`, `enrollment`, 각각 `controller`/`service`/`repository`/`domain`/`dto`. 공통은 `global.config`, `global.security`, `global.error`, `global.common`, `global.init`, `global.health`(`GET /api/v1/health`, 로그인 없이, D-33)
 - 호출 방향은 controller → service → repository. `enrollment`가 `course`를 참조하므로 `course`는 `enrollment`를 참조하지 않는다
 - 서비스 클래스에 `@Transactional(readOnly = true)`, 쓰기 메서드에만 `@Transactional`. 조회(`CourseService`)와 관리자 변경(`CourseAdminService`)을 나눈다
 - 목록 API는 `Pageable`을 받아 `PageResponse.from(page)`로 반환 (기본 10, 최대 100)
