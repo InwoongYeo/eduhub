@@ -15,6 +15,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 관리자의 과정·회차 등록·수정·종료 (FR-03). 삭제는 하지 않고 종료 상태로 바꾼다 (D-03).
+ * 회차의 confirmed_count를 덮어쓰지 않도록 회차를 바꾸는 모든 경로는 회차 행을 잠근다 (NFR-01, D-21).
  */
 @Service
 @Transactional(readOnly = true)
@@ -47,7 +48,7 @@ public class CourseAdminService {
 	public void closeCourse(Long courseId) {
 		Course course = findCourse(courseId);
 		course.close();
-		courseSessionRepository.findByCourseIdOrderBySessionNoAsc(courseId).forEach(CourseSession::close);
+		courseSessionRepository.findByCourseIdForUpdate(courseId).forEach(CourseSession::close);
 	}
 
 	/** 회차 번호는 과정 안의 현재 최대 번호 + 1 */
@@ -78,7 +79,7 @@ public class CourseAdminService {
 	}
 
 	private CourseSession findSession(Long sessionId) {
-		return courseSessionRepository.findById(sessionId)
+		return courseSessionRepository.findByIdForUpdate(sessionId)
 				.orElseThrow(() -> new BusinessException(ErrorCode.SESSION_NOT_FOUND));
 	}
 }

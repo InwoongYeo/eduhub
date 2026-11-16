@@ -97,6 +97,30 @@ public class CourseSession {
 		this.status = SessionStatus.CLOSED;
 	}
 
+	/**
+	 * 수강 신청이 가능한지 검사한다 (D-30). 종료된 회차(E002)를 먼저, 시작 시각 이후(E003)를 다음에 판정한다.
+	 */
+	public void checkEnrollable(LocalDateTime now) {
+		if (status == SessionStatus.CLOSED) {
+			throw new BusinessException(ErrorCode.SESSION_NOT_OPEN);
+		}
+		if (!now.isBefore(startsAt)) {
+			throw new BusinessException(ErrorCode.ENROLLMENT_PERIOD_ENDED);
+		}
+	}
+
+	/**
+	 * 자리가 있으면 확정 인원을 1 늘리고 true, 정원이 차면 false를 반환한다 (NFR-01).
+	 * 회차 행 잠금(findByIdForUpdate) 안에서만 호출해야 한다.
+	 */
+	public boolean reserveSeat() {
+		if (confirmedCount < capacity) {
+			confirmedCount++;
+			return true;
+		}
+		return false;
+	}
+
 	public int getRemainingSeats() {
 		return capacity - confirmedCount;
 	}
