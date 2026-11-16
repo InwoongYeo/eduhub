@@ -7,13 +7,18 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.eduhub.user.domain.Role;
+import com.eduhub.user.domain.User;
+import com.eduhub.user.repository.UserRepository;
 import com.jayway.jsonpath.JsonPath;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
@@ -36,6 +41,12 @@ class EnrollmentControllerTest {
 
 	@Autowired
 	MockMvc mockMvc;
+
+	@Autowired
+	UserRepository userRepository;
+
+	@Autowired
+	PasswordEncoder passwordEncoder;
 
 	@Test
 	void 임직원이_신청하면_201과_CONFIRMED를_받는다() throws Exception {
@@ -159,6 +170,125 @@ class EnrollmentControllerTest {
 						.contentType(MediaType.APPLICATION_JSON).content(SESSION_JSON))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.code").value("G003"));
+	}
+
+	@Test
+	void 신청_후_취소하면_200_CANCELLED이고_순번은_null이며_내_상태도_CANCELLED이다() throws Exception {
+		long sessionId = createSession(adminToken());
+		String employee = employeeToken();
+		mockMvc.perform(enroll(sessionId, employee)).andExpect(status().isCreated());
+
+		mockMvc.perform(cancel(sessionId, employee))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.sessionId").value(sessionId))
+				.andExpect(jsonPath("$.status").value("CANCELLED"))
+				.andExpect(jsonPath("$.waitingNo").hasJsonPath())
+				.andExpect(jsonPath("$.waitingNo").value(nullValue()));
+		mockMvc.perform(findMine(sessionId, employee))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("CANCELLED"));
+	}
+
+	@Test
+	void 이미_취소한_신청을_다시_취소하면_409_E005() throws Exception {
+		long sessionId = createSession(adminToken());
+		String employee = employeeToken();
+		mockMvc.perform(enroll(sessionId, employee)).andExpect(status().isCreated());
+		mockMvc.perform(cancel(sessionId, employee)).andExpect(status().isOk());
+
+		mockMvc.perform(cancel(sessionId, employee))
+				.andExpect(status().isConflict())
+				.andExpect(jsonPath("$.code").value("E005"));
+	}
+
+	@Test
+	void 신청이_없는_회차를_취소하면_404_E004() throws Exception {
+		long sessionId = createSession(adminToken());
+
+		mockMvc.perform(cancel(sessionId, employeeToken()))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("E004"));
+	}
+
+	@Test
+	void 없는_회차를_취소하면_404_C002() throws Exception {
+		mockMvc.perform(cancel(999999L, employeeToken()))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("C002"));
+	}
+
+	@Test
+	void 관리자_토큰으로_취소하면_403() throws Exception {
+		String admin = adminToken();
+		long sessionId = createSession(admin);
+
+		mockMvc.perform(cancel(sessionId, admin))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("G003"));
+	}
+
+	@Test
+	void 토큰_없이_취소하면_401() throws Exception {
+		long sessionId = createSession(adminToken());
+
+		mockMvc.perform(post("/api/v1/sessions/{id}/enrollments/me/cancel", sessionId))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("G002"));
+	}
+
+	@Test
+	void 취소_후_다시_신청하면_201_CONFIRMED이다() throws Exception {
+		long sessionId = createSession(adminToken());
+		String employee = employeeToken();
+		mockMvc.perform(enroll(sessionId, employee)).andExpect(status().isCreated());
+		mockMvc.perform(cancel(sessionId, employee)).andExpect(status().isOk());
+
+		mockMvc.perform(enroll(sessionId, employee))
+				.andExpect(status().isCreated())
+				.andExpect(jsonPath("$.status").value("CONFIRMED"));
+	}
+
+	@Test
+	void 임직원_토큰으로_회차를_종료하면_403이다_취소_규칙이_다른_경로를_열지_않는다() throws Exception {
+		long sessionId = createSession(adminToken());
+
+		mockMvc.perform(post("/api/v1/sessions/{id}/close", sessionId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + employeeToken()))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("G003"));
+	}
+
+	@Test
+	void 다른_임직원의_신청은_취소할_수_없다_본인_신청만_취소_가능() throws Exception {
+		long sessionId = createSession(adminToken());
+		String employeeA = employeeToken();
+		mockMvc.perform(enroll(sessionId, employeeA)).andExpect(status().isCreated());
+		String password = "b-test-password";
+		String emailB = "b-" + UUID.randomUUID() + "@test.local";
+		userRepository.saveAndFlush(
+				User.create(emailB, passwordEncoder.encode(password), "임직원B", Role.EMPLOYEE));
+		String employeeB = login(emailB, password);
+
+		mockMvc.perform(cancel(sessionId, employeeB))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("E004"));
+
+		mockMvc.perform(findMine(sessionId, employeeA))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.status").value("CONFIRMED"));
+		String courses = mockMvc.perform(get("/api/v1/courses").param("keyword", "신청 테스트"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		long courseId = JsonPath.<Number>read(courses, "$.content[0].id").longValue();
+		mockMvc.perform(get("/api/v1/courses/{id}", courseId))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.sessions[0].id").value(sessionId))
+				.andExpect(jsonPath("$.sessions[0].remainingSeats").value(1));
+	}
+
+	private MockHttpServletRequestBuilder cancel(long sessionId, String token) {
+		return post("/api/v1/sessions/{id}/enrollments/me/cancel", sessionId)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
 	}
 
 	private MockHttpServletRequestBuilder findMine(long sessionId, String token) {

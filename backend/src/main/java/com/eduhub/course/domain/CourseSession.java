@@ -121,6 +121,26 @@ public class CourseSession {
 		return false;
 	}
 
+	/**
+	 * 취소가 가능한지 검사한다 (FR-06, D-02). 종료된 회차이거나 시작 시각 이후면 E006이다.
+	 */
+	public void checkCancellable(LocalDateTime now) {
+		if (status == SessionStatus.CLOSED || !now.isBefore(startsAt)) {
+			throw new BusinessException(ErrorCode.CANCEL_PERIOD_ENDED);
+		}
+	}
+
+	/**
+	 * 확정 인원을 1 줄인다 (FR-06). 0이면 서비스의 버그다.
+	 * 회차 행 잠금(findByIdForUpdate) 안에서만 호출해야 한다.
+	 */
+	public void releaseSeat() {
+		if (confirmedCount <= 0) {
+			throw new IllegalStateException("확정 인원이 0인 회차의 자리를 반환할 수 없습니다.");
+		}
+		confirmedCount--;
+	}
+
 	public int getRemainingSeats() {
 		return capacity - confirmedCount;
 	}

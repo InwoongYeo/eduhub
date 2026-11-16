@@ -310,6 +310,136 @@ class EnrollmentServiceTest {
 		assertThat(session.getConfirmedCount()).isEqualTo(1);
 	}
 
+	private Enrollment cancelTarget(CourseSession session, EnrollmentStatus status, Long id) {
+		Enrollment e = Enrollment.create(employee, session, status);
+		ReflectionTestUtils.setField(e, "id", id);
+		return e;
+	}
+
+	private void givenMine(Enrollment mine) {
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID)).willReturn(Optional.of(mine));
+	}
+
+	private void givenNextWaiting(Optional<Enrollment> next) {
+		given(enrollmentRepository.findFirstBySessionIdAndStatusOrderByAppliedAtAscIdAsc(
+				SESSION_ID, EnrollmentStatus.WAITING)).willReturn(next);
+	}
+
+	private void assertCancelError(EnrollmentService service, ErrorCode expected) {
+		assertThatThrownBy(() -> service.cancel(SESSION_ID, EMPLOYEE_ID))
+				.isInstanceOfSatisfying(BusinessException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(expected));
+		verify(enrollmentRepository, never()).saveAndFlush(any());
+	}
+
+	@Test
+	void X1_확정_취소에_대기자가_있으면_1순위가_승급되고_확정_인원은_그대로다() {
+		CourseSession session = session(1);
+		session.reserveSeat();
+		Enrollment mine = cancelTarget(session, EnrollmentStatus.CONFIRMED, 77L);
+		Enrollment next = cancelTarget(session, EnrollmentStatus.WAITING, 78L);
+		Instant nextAppliedAt = next.getAppliedAt();
+		givenLockedSession(session);
+		givenMine(mine);
+		givenNextWaiting(Optional.of(next));
+		givenSaveReturnsArgument();
+
+		EnrollmentResponse result = enrollmentService.cancel(SESSION_ID, EMPLOYEE_ID);
+
+		assertThat(result.status()).isEqualTo(EnrollmentStatus.CANCELLED);
+		assertThat(result.waitingNo()).isNull();
+		assertThat(result.enrollmentId()).isEqualTo(77L);
+		assertThat(mine.getStatus()).isEqualTo(EnrollmentStatus.CANCELLED);
+		assertThat(next.getStatus()).isEqualTo(EnrollmentStatus.CONFIRMED);
+		assertThat(next.getAppliedAt()).isEqualTo(nextAppliedAt);
+		assertThat(session.getConfirmedCount()).isEqualTo(1);
+	}
+
+	@Test
+	void X2_확정_취소에_대기자가_없으면_확정_인원이_1_줄어든다() {
+		CourseSession session = session(2);
+		session.reserveSeat();
+		Enrollment mine = cancelTarget(session, EnrollmentStatus.CONFIRMED, 77L);
+		givenLockedSession(session);
+		givenMine(mine);
+		givenNextWaiting(Optional.empty());
+		givenSaveReturnsArgument();
+
+		EnrollmentResponse result = enrollmentService.cancel(SESSION_ID, EMPLOYEE_ID);
+
+		assertThat(result.status()).isEqualTo(EnrollmentStatus.CANCELLED);
+		assertThat(session.getConfirmedCount()).isZero();
+	}
+
+	@Test
+	void X3_대기_취소는_승급_조회를_하지_않고_확정_인원이_그대로다() {
+		CourseSession session = session(1);
+		session.reserveSeat();
+		Enrollment mine = cancelTarget(session, EnrollmentStatus.WAITING, 77L);
+		givenLockedSession(session);
+		givenMine(mine);
+		givenSaveReturnsArgument();
+
+		EnrollmentResponse result = enrollmentService.cancel(SESSION_ID, EMPLOYEE_ID);
+
+		assertThat(result.status()).isEqualTo(EnrollmentStatus.CANCELLED);
+		assertThat(session.getConfirmedCount()).isEqualTo(1);
+		verify(enrollmentRepository, never())
+				.findFirstBySessionIdAndStatusOrderByAppliedAtAscIdAsc(any(), any());
+	}
+
+	@Test
+	void X4a_취소할_회차가_없으면_C002이다() {
+		given(courseSessionRepository.findByIdForUpdate(SESSION_ID)).willReturn(Optional.empty());
+
+		assertCancelError(enrollmentService, ErrorCode.SESSION_NOT_FOUND);
+	}
+
+	@Test
+	void X4b_신청이_없으면_E004이다() {
+		givenLockedSession(session(1));
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID)).willReturn(Optional.empty());
+
+		assertCancelError(enrollmentService, ErrorCode.ENROLLMENT_NOT_FOUND);
+	}
+
+	@Test
+	void X4c_시작_시각이_지났으면_E006이고_확정_인원은_그대로다() {
+		Clock atStart = Clock.fixed(startsAt.atZone(SEOUL).toInstant(), SEOUL);
+		EnrollmentService service = new EnrollmentService(
+				courseSessionRepository, enrollmentRepository, userRepository, atStart);
+		CourseSession session = session(1);
+		session.reserveSeat();
+		givenLockedSession(session);
+		givenMine(cancelTarget(session, EnrollmentStatus.CONFIRMED, 77L));
+
+		assertCancelError(service, ErrorCode.CANCEL_PERIOD_ENDED);
+		assertThat(session.getConfirmedCount()).isEqualTo(1);
+	}
+
+	@Test
+	void X4d_종료된_회차는_E006이다() {
+		CourseSession session = session(1);
+		session.close();
+		givenLockedSession(session);
+		givenMine(cancelTarget(session, EnrollmentStatus.WAITING, 77L));
+
+		assertCancelError(enrollmentService, ErrorCode.CANCEL_PERIOD_ENDED);
+	}
+
+	@Test
+	void X4e_이미_취소된_신청은_E005이고_확정_인원은_그대로다() {
+		CourseSession session = session(1);
+		session.reserveSeat();
+		givenLockedSession(session);
+		givenMine(cancelTarget(session, EnrollmentStatus.CANCELLED, 77L));
+
+		assertCancelError(enrollmentService, ErrorCode.CANCEL_NOT_ALLOWED);
+		assertThat(session.getConfirmedCount()).isEqualTo(1);
+		verify(enrollmentRepository, never())
+				.findFirstBySessionIdAndStatusOrderByAppliedAtAscIdAsc(any(), any());
+	}
+
 	private DataIntegrityViolationException integrityViolation(String constraintName) {
 		SQLException sql = new SQLException("constraint violated");
 		return new DataIntegrityViolationException("무결성 위반",
