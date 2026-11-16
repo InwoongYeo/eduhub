@@ -117,14 +117,14 @@
 | 경쟁 조건 (조회 → 판단 → 저장 사이 끼어들기) | 1에서 회차 행을 잠그므로 같은 회차 신청은 줄을 선다. 2~6은 잠금 안에서 실행 |
 | 같은 사람이 동시에 두 번 신청 | 회차 잠금으로 직렬화되어 두 번째는 3에서 E001. 잠금이 빠져도 유일 제약이 막고 6에서 E001 |
 | 정원 초과 | 잠금 + `reserveSeat()` + DB 검사 제약(`ck_course_session_seats`) 이중 보장 |
-| 교착 상태 | **신청 경로**가 잠그는 행은 회차 하나뿐. enrollment INSERT의 외래 키 검사는 이미 X 잠금을 가진 회차 행이라 추가 대기 없음. 단, **관리자의 과정 종료(`closeCourse`)와 회차 추가(`addSession`)가 같은 과정에 동시에 실행되면 교착이 생길 수 있다** (아래, D-32) |
+| 교착 상태 | **신청 경로**가 잠그는 행은 회차 하나뿐. enrollment INSERT의 외래 키 검사는 이미 X 잠금을 가진 회차 행이라 추가 대기 없음. 관리자의 과정 종료(`closeCourse`)와 회차 추가(`addSession`)의 교착은 D-32에서 과정 행을 먼저 잠그도록 해결했다 (아래, `docs/design/course-close-lock.md`) |
 | 잠금 구간이 길어짐 | 잠금 안에서 외부 호출·알림 없음. 알림(FR-09)은 이후 커밋 후 처리 |
 | 잠금 대기 시간 | MySQL 기본 `innodb_lock_wait_timeout`(50초)을 그대로 둔다. 제한·503은 이번 범위 밖 (8회차 성능 점검에서 측정 후 결정) |
 
 - **회차를 바꾸는 모든 경로는 회차 행을 잠근다** (최종 검토 S1 반영). 관리자의 회차 수정·종료, 과정 종료(그 과정의 회차를 범위 조건으로 잠금. InnoDB는 `uk_course_session_no(course_id, session_no)` 인덱스를 훑는 순서로 행과 마지막 행 뒤 간격까지 잠그며, `order by s.id`는 결과 정렬일 뿐 잠금 순서가 아니다)도 `findByIdForUpdate`·`findByCourseIdForUpdate`로 읽는다. 잠그지 않으면 저장할 때 오래된 `confirmed_count`를 덮어써 정원을 넘을 수 있다
 - 저장 시 `DataIntegrityViolationException`은 **유일 제약 `uk_enrollment_employee_session` 위반만** E001로 바꾸고, 그 밖의 제약 위반은 로그를 남기고 그대로 던진다(500) (최종 검토 W1 반영)
 - MySQL 교착·잠금 대기 초과(`CannotAcquireLockException`)는 현재 500이다. 503 처리는 범위 밖(1장)
-- **알려진 교착 (최종 재검토 W-a, 후속 D-32)**: A `closeCourse`가 회차 행과 뒤 간격을 잠근 상태에서 B `addSession`이 FK 검사로 course 행 S 잠금을 잡고 간격 잠금에 막혀 대기 → A가 flush에서 `UPDATE course`(X 잠금)를 기다리며 교착. InnoDB가 한쪽을 롤백해 그 관리자는 500을 받는다. 데이터는 깨지지 않는다(롤백). 관리자끼리의 드문 경합이라 이번 PR에서는 고치지 않는다
+- **알려진 교착 (최종 재검토 W-a, D-32에서 해결됨 — 과정 행 선잠금, D-35)**: A `closeCourse`가 회차 행과 뒤 간격을 잠근 상태에서 B `addSession`이 FK 검사로 course 행 S 잠금을 잡고 간격 잠금에 막혀 대기 → A가 flush에서 `UPDATE course`(X 잠금)를 기다리며 교착. (해결 전 현상) InnoDB가 한쪽을 롤백해 그 관리자는 500을 받았다. 데이터는 깨지지 않았다(롤백). FR-04 PR에서는 고치지 않고 D-32 후속 PR에서 해결했다
 - **재신청 정합성의 전제**: `enroll`에서 회차 잠금(`findByIdForUpdate`)보다 **앞에 다른 일반 조회를 두지 않는다.** REPEATABLE READ 스냅숏이 잠금 뒤 첫 일반 읽기에서 만들어져야 `findBySessionIdAndEmployeeId`가 앞 트랜잭션의 커밋 결과(CANCELLED → CONFIRMED)를 본다. 어기면 중복 재신청이 생기며, N4가 이 회귀를 잡는다
 - `confirmed_count`는 이번에는 **증가만** 한다. 감소(취소)·승급은 FR-06에서 같은 잠금 방식으로
 - 신청자 확인: JWT가 유효해도 사용자 행이 없거나 비활성일 수 있다. 처리 방식은 9장 Q1 (제안: 조회해서 401)
