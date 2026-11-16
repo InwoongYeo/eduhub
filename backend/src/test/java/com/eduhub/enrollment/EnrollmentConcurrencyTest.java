@@ -14,6 +14,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.IntStream;
 
 import com.eduhub.course.domain.Course;
 import com.eduhub.course.domain.CourseSession;
@@ -191,6 +192,7 @@ class EnrollmentConcurrencyTest {
 		assertThat(dbCountOf(sessionId, EnrollmentStatus.CONFIRMED)).isEqualTo(10);
 		assertThat(dbCountOf(sessionId, EnrollmentStatus.WAITING)).isEqualTo(90);
 		assertThat(confirmedCountOf(sessionId)).isEqualTo(10);
+		assertThat(waitingNosOf(results)).containsExactlyElementsOf(rangeClosed(1, 90));
 	}
 
 	@Test
@@ -207,6 +209,48 @@ class EnrollmentConcurrencyTest {
 		assertThat(dbCountOf(sessionId, EnrollmentStatus.CONFIRMED)).isEqualTo(1);
 		assertThat(dbCountOf(sessionId, EnrollmentStatus.WAITING)).isEqualTo(99);
 		assertThat(confirmedCountOf(sessionId)).isEqualTo(1);
+		assertThat(waitingNosOf(results)).containsExactlyElementsOf(rangeClosed(1, 99));
+	}
+
+	/** 대기 응답의 순번을 오름차순으로 모은다 (FR-05). */
+	private List<Integer> waitingNosOf(List<Object> results) {
+		return results.stream()
+				.filter(r -> r instanceof EnrollmentResponse response && response.status() == EnrollmentStatus.WAITING)
+				.map(r -> ((EnrollmentResponse) r).waitingNo())
+				.sorted()
+				.toList();
+	}
+
+	private static List<Integer> rangeClosed(int from, int to) {
+		return IntStream.rangeClosed(from, to).boxed().toList();
+	}
+
+	@Test
+	@DisplayName("N7: 정원 1에 30명이 동시에 신청한 뒤 대기자 각각의 내 상태 조회 순번이 신청 응답의 순번과 같고 1~29이다")
+	void 동시_신청_뒤_내_상태_조회_순번이_신청_응답과_같다() throws Exception {
+		Long sessionId = createSession(1);
+		int applicants = 30;
+		List<Callable<EnrollmentResponse>> tasks = new ArrayList<>();
+		for (int i = 0; i < applicants; i++) {
+			Long userId = userIds.get(i);
+			tasks.add(() -> enrollmentService.enroll(sessionId, userId));
+		}
+
+		List<Object> results = runConcurrently(tasks);
+
+		assertThat(results.stream().filter(r -> r instanceof Throwable).count()).isZero();
+		List<Integer> mineNos = new ArrayList<>();
+		for (int i = 0; i < applicants; i++) {
+			EnrollmentResponse applied = (EnrollmentResponse) results.get(i);
+			EnrollmentResponse mine = enrollmentService.findMine(sessionId, userIds.get(i));
+			assertThat(mine.status()).isEqualTo(applied.status());
+			assertThat(mine.waitingNo()).isEqualTo(applied.waitingNo());
+			if (mine.status() == EnrollmentStatus.WAITING) {
+				mineNos.add(mine.waitingNo());
+			}
+		}
+		assertThat(waitingNosOf(results)).containsExactlyElementsOf(rangeClosed(1, applicants - 1));
+		assertThat(mineNos.stream().sorted().toList()).containsExactlyElementsOf(rangeClosed(1, applicants - 1));
 	}
 
 	/**

@@ -3,6 +3,7 @@ package com.eduhub.enrollment.service;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.Locale;
 
 import com.eduhub.course.domain.CourseSession;
@@ -68,7 +69,8 @@ public class EnrollmentService {
 		}
 
 		boolean confirmed = session.reserveSeat();
-		Instant now = clock.instant();
+		// DB DATETIME(6)과 정밀도를 맞춰 POST 응답과 GET me의 appliedAt이 같게 한다
+		Instant now = clock.instant().truncatedTo(ChronoUnit.MICROS);
 		Enrollment enrollment;
 		if (existing != null) {
 			existing.reapply(confirmed, now);
@@ -77,8 +79,9 @@ public class EnrollmentService {
 			enrollment = Enrollment.apply(employee, session, confirmed, now);
 		}
 
+		Enrollment saved;
 		try {
-			return EnrollmentResponse.from(enrollmentRepository.saveAndFlush(enrollment));
+			saved = enrollmentRepository.saveAndFlush(enrollment);
 		} catch (DataIntegrityViolationException e) {
 			if (isDuplicateEnrollment(e)) {
 				throw new BusinessException(ErrorCode.DUPLICATE_ENROLLMENT);
@@ -88,6 +91,27 @@ public class EnrollmentService {
 					sessionId, employeeId, describeConstraint(e), e);
 			throw e;
 		}
+		// 순번은 회차 잠금을 쥔 채 저장 뒤에 계산해야 동시 신청에서도 정확하다 (FR-05, D-36)
+		// 전제: 회차 잠금(findByIdForUpdate) 이전에 일반 SELECT를 두지 않는다. MySQL REPEATABLE READ의 스냅숏이
+		// 잠금 뒤 첫 일반 읽기에서 만들어져야 countWaitingAhead가 앞선 신청의 커밋을 본다. 어기면 대기 순번이
+		// 중복된다 (D-36). EnrollmentConcurrencyTest N1·N2·N7이 이 회귀를 잡는다.
+		return EnrollmentResponse.of(saved, saved.getStatus() == EnrollmentStatus.WAITING ? waitingNoOf(saved) : null);
+	}
+
+	/** 내 신청 상태. 대기 중이면 지금 시점의 순번을 함께 돌려준다 (FR-05). 신청자는 토큰의 subject만 쓴다. */
+	public EnrollmentResponse findMine(Long sessionId, Long employeeId) {
+		if (!courseSessionRepository.existsById(sessionId)) {
+			throw new BusinessException(ErrorCode.SESSION_NOT_FOUND);
+		}
+		Enrollment enrollment = enrollmentRepository.findBySessionIdAndEmployeeId(sessionId, employeeId)
+				.orElseThrow(() -> new BusinessException(ErrorCode.ENROLLMENT_NOT_FOUND));
+		return EnrollmentResponse.of(enrollment,
+				enrollment.getStatus() == EnrollmentStatus.WAITING ? waitingNoOf(enrollment) : null);
+	}
+
+	private Integer waitingNoOf(Enrollment enrollment) {
+		return (int) enrollmentRepository.countWaitingAhead(
+				enrollment.getSession().getId(), enrollment.getAppliedAt(), enrollment.getId()) + 1;
 	}
 
 	/**

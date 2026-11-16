@@ -2,6 +2,7 @@ package com.eduhub.enrollment.repository;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 import com.eduhub.course.domain.Course;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
+import org.springframework.test.util.ReflectionTestUtils;
 
 @DataJpaTest(properties = {
 		"spring.datasource.url=jdbc:h2:mem:jpatest-enrollment;MODE=MySQL;DATABASE_TO_LOWER=TRUE",
@@ -84,6 +86,81 @@ class EnrollmentRepositoryTest {
 
 		assertThat(enrollmentRepository.countBySessionIdAndStatus(s1.getId(), EnrollmentStatus.CONFIRMED)).isEqualTo(2);
 		assertThat(enrollmentRepository.countBySessionIdAndStatus(s1.getId(), EnrollmentStatus.WAITING)).isEqualTo(1);
+	}
+
+	private Enrollment enrollment(User user, CourseSession session, EnrollmentStatus status, Instant appliedAt) {
+		Enrollment e = Enrollment.create(user, session, status);
+		ReflectionTestUtils.setField(e, "appliedAt", appliedAt);
+		return enrollmentRepository.save(e);
+	}
+
+	private long ahead(Enrollment e) {
+		return enrollmentRepository.countWaitingAhead(e.getSession().getId(), e.getAppliedAt(), e.getId());
+	}
+
+	@Test
+	void 대기자_앞선_수는_신청_시각_순서로_0_1_2이다() {
+		Course course = courseRepository.save(Course.create("자바 기초", "입문", "개발"));
+		CourseSession s1 = session(course, 1);
+		Instant t = Instant.parse("2026-11-16T01:00:00Z");
+		Enrollment w1 = enrollment(user("a@eduhub.local"), s1, EnrollmentStatus.WAITING, t);
+		Enrollment w2 = enrollment(user("b@eduhub.local"), s1, EnrollmentStatus.WAITING, t.plusSeconds(1));
+		Enrollment w3 = enrollment(user("c@eduhub.local"), s1, EnrollmentStatus.WAITING, t.plusSeconds(2));
+		em.flush();
+		em.clear();
+
+		assertThat(ahead(w1)).isZero();
+		assertThat(ahead(w2)).isEqualTo(1);
+		assertThat(ahead(w3)).isEqualTo(2);
+	}
+
+	@Test
+	void 같은_시각이면_id가_작은_쪽이_앞선다() {
+		Course course = courseRepository.save(Course.create("자바 기초", "입문", "개발"));
+		CourseSession s1 = session(course, 1);
+		Instant t = Instant.parse("2026-11-16T01:00:00Z");
+		Enrollment first = enrollment(user("a@eduhub.local"), s1, EnrollmentStatus.WAITING, t);
+		Enrollment second = enrollment(user("b@eduhub.local"), s1, EnrollmentStatus.WAITING, t);
+		em.flush();
+		em.clear();
+
+		assertThat(first.getId()).isLessThan(second.getId());
+		assertThat(ahead(first)).isZero();
+		assertThat(ahead(second)).isEqualTo(1);
+	}
+
+	@Test
+	void 재신청_행은_id가_작아도_신청_시각이_늦으면_기존_대기자_뒤다() {
+		Course course = courseRepository.save(Course.create("자바 기초", "입문", "개발"));
+		CourseSession s1 = session(course, 1);
+		Instant t = Instant.parse("2026-11-16T01:00:00Z");
+		Enrollment reapplied = enrollment(user("a@eduhub.local"), s1, EnrollmentStatus.CANCELLED, t);
+		Enrollment w1 = enrollment(user("b@eduhub.local"), s1, EnrollmentStatus.WAITING, t.plusSeconds(1));
+		Enrollment w2 = enrollment(user("c@eduhub.local"), s1, EnrollmentStatus.WAITING, t.plusSeconds(2));
+		reapplied.reapply(false, t.plusSeconds(3));
+		em.flush();
+		em.clear();
+
+		assertThat(reapplied.getId()).isLessThan(w1.getId());
+		assertThat(ahead(w1)).isZero();
+		assertThat(ahead(w2)).isEqualTo(1);
+		assertThat(ahead(reapplied)).isEqualTo(2);
+	}
+
+	@Test
+	void 확정_취소_다른_회차의_신청은_앞선_수에_세지_않는다() {
+		Course course = courseRepository.save(Course.create("자바 기초", "입문", "개발"));
+		CourseSession s1 = session(course, 1);
+		CourseSession s2 = session(course, 2);
+		Instant t = Instant.parse("2026-11-16T01:00:00Z");
+		enrollment(user("a@eduhub.local"), s1, EnrollmentStatus.CONFIRMED, t);
+		enrollment(user("b@eduhub.local"), s1, EnrollmentStatus.CANCELLED, t.plusSeconds(1));
+		enrollment(user("c@eduhub.local"), s2, EnrollmentStatus.WAITING, t.plusSeconds(2));
+		Enrollment mine = enrollment(user("d@eduhub.local"), s1, EnrollmentStatus.WAITING, t.plusSeconds(3));
+		em.flush();
+		em.clear();
+
+		assertThat(ahead(mine)).isZero();
 	}
 
 	@Test

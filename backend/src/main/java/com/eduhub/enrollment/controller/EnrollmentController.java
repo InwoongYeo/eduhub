@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -49,5 +50,21 @@ public class EnrollmentController {
 	@ResponseStatus(HttpStatus.CREATED)
 	public EnrollmentResponse enroll(@PathVariable Long sessionId, @AuthenticationPrincipal Jwt jwt) {
 		return enrollmentService.enroll(sessionId, Long.valueOf(jwt.getSubject()));
+	}
+
+	@Operation(summary = "내 신청 상태 조회",
+			description = "토큰 사용자의 해당 회차 신청 상태를 돌려준다. 대기 중이면 현재 대기 순번(waitingNo)을 함께 돌려준다")
+	@ApiResponses({
+			@ApiResponse(responseCode = "200", description = "조회 성공"),
+			@ApiResponse(responseCode = "401", description = "인증 실패",
+					content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "403", description = "임직원이 아님",
+					content = @Content(schema = @Schema(implementation = ErrorResponse.class))),
+			@ApiResponse(responseCode = "404", description = "회차가 없거나 신청 내역이 없음",
+					content = @Content(schema = @Schema(implementation = ErrorResponse.class)))
+	})
+	@GetMapping("/sessions/{sessionId}/enrollments/me")
+	public EnrollmentResponse findMine(@PathVariable Long sessionId, @AuthenticationPrincipal Jwt jwt) {
+		return enrollmentService.findMine(sessionId, Long.valueOf(jwt.getSubject()));
 	}
 }

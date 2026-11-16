@@ -1,5 +1,7 @@
 package com.eduhub.enrollment.controller;
 
+import static org.hamcrest.Matchers.nullValue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -44,7 +46,58 @@ class EnrollmentControllerTest {
 				.andExpect(jsonPath("$.enrollmentId").isNumber())
 				.andExpect(jsonPath("$.sessionId").value(sessionId))
 				.andExpect(jsonPath("$.status").value("CONFIRMED"))
-				.andExpect(jsonPath("$.appliedAt").isNotEmpty());
+				.andExpect(jsonPath("$.appliedAt").isNotEmpty())
+				.andExpect(jsonPath("$.waitingNo").hasJsonPath())
+				.andExpect(jsonPath("$.waitingNo").value(nullValue()));
+	}
+
+	@Test
+	void 신청_직후_내_신청_상태를_조회하면_CONFIRMED이고_순번은_null이다() throws Exception {
+		long sessionId = createSession(adminToken());
+		String employee = employeeToken();
+		mockMvc.perform(enroll(sessionId, employee)).andExpect(status().isCreated());
+
+		mockMvc.perform(findMine(sessionId, employee))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.sessionId").value(sessionId))
+				.andExpect(jsonPath("$.status").value("CONFIRMED"))
+				.andExpect(jsonPath("$.waitingNo").hasJsonPath())
+				.andExpect(jsonPath("$.waitingNo").value(nullValue()));
+	}
+
+	@Test
+	void 신청한_적_없는_회차의_내_상태_조회는_404_E004() throws Exception {
+		long sessionId = createSession(adminToken());
+
+		mockMvc.perform(findMine(sessionId, employeeToken()))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("E004"));
+	}
+
+	@Test
+	void 없는_회차의_내_상태_조회는_404_C002() throws Exception {
+		mockMvc.perform(findMine(999999L, employeeToken()))
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.code").value("C002"));
+	}
+
+	@Test
+	void 관리자_토큰으로_내_상태를_조회하면_403() throws Exception {
+		String admin = adminToken();
+		long sessionId = createSession(admin);
+
+		mockMvc.perform(findMine(sessionId, admin))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("G003"));
+	}
+
+	@Test
+	void 토큰_없이_내_상태를_조회하면_401() throws Exception {
+		long sessionId = createSession(adminToken());
+
+		mockMvc.perform(get("/api/v1/sessions/{id}/enrollments/me", sessionId))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("G002"));
 	}
 
 	@Test
@@ -106,6 +159,11 @@ class EnrollmentControllerTest {
 						.contentType(MediaType.APPLICATION_JSON).content(SESSION_JSON))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.code").value("G003"));
+	}
+
+	private MockHttpServletRequestBuilder findMine(long sessionId, String token) {
+		return get("/api/v1/sessions/{id}/enrollments/me", sessionId)
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
 	}
 
 	private MockHttpServletRequestBuilder enroll(long sessionId,
