@@ -125,6 +125,86 @@ class EnrollmentServiceTest {
 	}
 
 	@Test
+	void U11_정원이_차면_앞선_대기자_수_더하기_1이_순번이다() {
+		CourseSession session = session(1);
+		session.reserveSeat();
+		givenLockedSession(session);
+		givenActiveEmployee();
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID)).willReturn(Optional.empty());
+		givenSaveReturnsArgument();
+		given(enrollmentRepository.countWaitingAhead(SESSION_ID, clock.instant(), 100L)).willReturn(3L);
+
+		EnrollmentResponse result = enrollmentService.enroll(SESSION_ID, EMPLOYEE_ID);
+
+		assertThat(result.waitingNo()).isEqualTo(4);
+	}
+
+	@Test
+	void U12_자리가_있으면_순번은_null이고_세지_않는다() {
+		givenLockedSession(session(2));
+		givenActiveEmployee();
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID)).willReturn(Optional.empty());
+		givenSaveReturnsArgument();
+
+		EnrollmentResponse result = enrollmentService.enroll(SESSION_ID, EMPLOYEE_ID);
+
+		assertThat(result.waitingNo()).isNull();
+		verify(enrollmentRepository, never()).countWaitingAhead(any(), any(), any());
+	}
+
+	private Enrollment enrollmentWith(EnrollmentStatus status) {
+		Enrollment e = Enrollment.create(employee, session(1), status);
+		ReflectionTestUtils.setField(e, "id", 77L);
+		return e;
+	}
+
+	@Test
+	void U13a_내_신청이_대기이면_현재_순번을_돌려준다() {
+		Enrollment waiting = enrollmentWith(EnrollmentStatus.WAITING);
+		given(courseSessionRepository.existsById(SESSION_ID)).willReturn(true);
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID))
+				.willReturn(Optional.of(waiting));
+		given(enrollmentRepository.countWaitingAhead(SESSION_ID, waiting.getAppliedAt(), 77L)).willReturn(2L);
+
+		EnrollmentResponse result = enrollmentService.findMine(SESSION_ID, EMPLOYEE_ID);
+
+		assertThat(result.status()).isEqualTo(EnrollmentStatus.WAITING);
+		assertThat(result.waitingNo()).isEqualTo(3);
+	}
+
+	@Test
+	void U13b_내_신청이_확정이면_순번은_null이다() {
+		given(courseSessionRepository.existsById(SESSION_ID)).willReturn(true);
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID))
+				.willReturn(Optional.of(enrollmentWith(EnrollmentStatus.CONFIRMED)));
+
+		EnrollmentResponse result = enrollmentService.findMine(SESSION_ID, EMPLOYEE_ID);
+
+		assertThat(result.status()).isEqualTo(EnrollmentStatus.CONFIRMED);
+		assertThat(result.waitingNo()).isNull();
+		verify(enrollmentRepository, never()).countWaitingAhead(any(), any(), any());
+	}
+
+	@Test
+	void U13c_신청한_적_없으면_E004이다() {
+		given(courseSessionRepository.existsById(SESSION_ID)).willReturn(true);
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID)).willReturn(Optional.empty());
+
+		assertThatThrownBy(() -> enrollmentService.findMine(SESSION_ID, EMPLOYEE_ID))
+				.isInstanceOfSatisfying(BusinessException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.ENROLLMENT_NOT_FOUND));
+	}
+
+	@Test
+	void U13d_회차가_없으면_C002이다() {
+		given(courseSessionRepository.existsById(SESSION_ID)).willReturn(false);
+
+		assertThatThrownBy(() -> enrollmentService.findMine(SESSION_ID, EMPLOYEE_ID))
+				.isInstanceOfSatisfying(BusinessException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.SESSION_NOT_FOUND));
+	}
+
+	@Test
 	void 회차가_없으면_C002이고_저장하지_않는다() {
 		given(courseSessionRepository.findByIdForUpdate(SESSION_ID)).willReturn(Optional.empty());
 

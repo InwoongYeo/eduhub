@@ -26,6 +26,10 @@
       "description": "수강 신청"
     },
     {
+      "name": "Health",
+      "description": "서버 상태 확인"
+    },
+    {
       "name": "Course",
       "description": "교육과정 조회·관리"
     }
@@ -462,6 +466,94 @@
           }
         }
       }
+    },
+    "/api/v1/sessions/{sessionId}/enrollments/me": {
+      "get": {
+        "tags": [
+          "Enrollment"
+        ],
+        "summary": "내 신청 상태 조회",
+        "description": "토큰 사용자의 해당 회차 신청 상태를 돌려준다. 대기 중이면 현재 대기 순번(waitingNo)을 함께 돌려준다",
+        "operationId": "findMine",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/EnrollmentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "임직원이 아님",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "회차가 없거나 신청 내역이 없음",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "Health"
+        ],
+        "summary": "서버 상태 확인",
+        "description": "서버가 요청을 받을 수 있으면 {\"status\": \"UP\"}을 돌려준다",
+        "operationId": "health",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -615,16 +707,27 @@
           },
           "status": {
             "type": "string",
-            "description": "신청 상태. 자리가 있으면 CONFIRMED, 정원이 차면 WAITING (D-31)",
+            "description": "신청 상태: CONFIRMED, WAITING, CANCELLED, COMPLETED",
             "enum": [
               "CONFIRMED",
-              "WAITING"
+              "WAITING",
+              "CANCELLED",
+              "COMPLETED"
             ]
           },
           "appliedAt": {
             "type": "string",
             "format": "date-time",
             "description": "신청(재신청) 시각. 대기 순번의 기준 (FR-05)"
+          },
+          "waitingNo": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "대기 순번. 대기 중일 때 1부터, 아니면 null",
+            "example": 4
           }
         }
       },
