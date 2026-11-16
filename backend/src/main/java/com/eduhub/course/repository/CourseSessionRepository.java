@@ -23,7 +23,7 @@ public interface CourseSessionRepository extends JpaRepository<CourseSession, Lo
 
 	/**
 	 * 과정의 회차를 모두 쓰기 잠금으로 조회한다. InnoDB는 uk_course_session_no 인덱스 순서로 행과 마지막 행 뒤 간격까지 잠근다
-	 * (order by는 결과 정렬일 뿐). 같은 과정의 addSession과 동시에 실행되면 교착이 생길 수 있다 (D-32).
+	 * (order by는 결과 정렬일 뿐). 과정 행을 먼저 잠근 뒤 호출한다 (D-32).
 	 * 트랜잭션 안에서 호출해야 한다.
 	 */
 	@Lock(LockModeType.PESSIMISTIC_WRITE)

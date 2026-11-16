@@ -44,7 +44,7 @@ class CourseAdminServiceTest {
 	@Test
 	void 회차_번호는_현재_최대_번호_다음으로_정해진다() {
 		Course course = Course.create("자바 기초", "입문", "개발");
-		given(courseRepository.findById(1L)).willReturn(Optional.of(course));
+		given(courseRepository.findByIdForUpdate(1L)).willReturn(Optional.of(course));
 		given(courseSessionRepository.findMaxSessionNo(1L)).willReturn(2);
 		given(courseSessionRepository.save(any(CourseSession.class))).willAnswer(inv -> inv.getArgument(0));
 
@@ -61,7 +61,7 @@ class CourseAdminServiceTest {
 		Course course = Course.create("자바 기초", "입문", "개발");
 		CourseSession s1 = CourseSession.create(course, 1, start, start.plusHours(8), "본사", 30);
 		CourseSession s2 = CourseSession.create(course, 2, start.plusDays(7), start.plusDays(7).plusHours(8), "본사", 30);
-		given(courseRepository.findById(1L)).willReturn(Optional.of(course));
+		given(courseRepository.findByIdForUpdate(1L)).willReturn(Optional.of(course));
 		given(courseSessionRepository.findByCourseIdForUpdate(1L)).willReturn(List.of(s1, s2));
 
 		courseAdminService.closeCourse(1L);
@@ -74,7 +74,7 @@ class CourseAdminServiceTest {
 	void 종료된_과정은_수정하거나_회차를_추가할_수_없다() {
 		Course course = Course.create("자바 기초", "입문", "개발");
 		course.close();
-		given(courseRepository.findById(1L)).willReturn(Optional.of(course));
+		given(courseRepository.findByIdForUpdate(1L)).willReturn(Optional.of(course));
 
 		assertErrorCode(() -> courseAdminService.updateCourse(1L, new CourseRequest("새 제목", null, "개발")),
 				ErrorCode.COURSE_CLOSED);
@@ -96,7 +96,7 @@ class CourseAdminServiceTest {
 	@Test
 	void 종료_시각이_시작_시각보다_앞서면_회차를_만들_수_없다() {
 		Course course = Course.create("자바 기초", "입문", "개발");
-		given(courseRepository.findById(1L)).willReturn(Optional.of(course));
+		given(courseRepository.findByIdForUpdate(1L)).willReturn(Optional.of(course));
 
 		assertErrorCode(() -> courseAdminService.addSession(1L, new SessionRequest(start, start.minusHours(1), "본사", 30)),
 				ErrorCode.INVALID_SESSION_TIME);
