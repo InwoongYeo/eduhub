@@ -58,6 +58,8 @@ public class SecurityConfig {
 						.requestMatchers(HttpMethod.POST, "/api/v1/auth/login").permitAll()
 						// FR-01·02: 과정 조회는 로그인 없이 (D-22)
 						.requestMatchers(HttpMethod.GET, "/api/v1/courses", "/api/v1/courses/**").permitAll()
+						// FR-04: 회차 수강 신청은 임직원만 (D-28, D-29)
+						.requestMatchers(HttpMethod.POST, "/api/v1/sessions/*/enrollments").hasRole("EMPLOYEE")
 						// FR-03: 과정·회차 등록·수정·종료는 관리자만
 						.requestMatchers("/api/v1/courses", "/api/v1/courses/**", "/api/v1/sessions/**").hasRole("ADMIN")
 						.anyRequest().authenticated())

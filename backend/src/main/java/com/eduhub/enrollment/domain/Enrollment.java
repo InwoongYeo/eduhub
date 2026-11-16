@@ -3,6 +3,8 @@ package com.eduhub.enrollment.domain;
 import java.time.Instant;
 
 import com.eduhub.course.domain.CourseSession;
+import com.eduhub.global.error.BusinessException;
+import com.eduhub.global.error.ErrorCode;
 import com.eduhub.user.domain.User;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -22,7 +24,7 @@ import org.hibernate.type.SqlTypes;
 
 /**
  * 임직원의 회차 수강 신청 (D-17). 임직원·회차 쌍당 한 행이라 같은 회차에 중복 신청할 수 없다 (FR-04).
- * 신청·대기·취소 규칙(FR-04~06)은 3주차에 구현한다.
+ * 신청·대기 규칙(FR-04)은 apply·reapply로 구현했고, 취소·승급(FR-06)은 아직 없다.
  */
 @Entity
 @Table(name = "enrollment",
@@ -61,8 +63,33 @@ public class Enrollment {
 		this.appliedAt = Instant.now();
 	}
 
+	private Enrollment(User employee, CourseSession session, EnrollmentStatus status, Instant appliedAt) {
+		this.employee = employee;
+		this.session = session;
+		this.status = status;
+		this.appliedAt = appliedAt;
+	}
+
 	public static Enrollment create(User employee, CourseSession session, EnrollmentStatus status) {
 		return new Enrollment(employee, session, status);
+	}
+
+	/**
+	 * 새 수강 신청. 자리가 있으면 CONFIRMED, 없으면 WAITING으로 만든다 (FR-04).
+	 */
+	public static Enrollment apply(User employee, CourseSession session, boolean confirmed, Instant now) {
+		return new Enrollment(employee, session, confirmed ? EnrollmentStatus.CONFIRMED : EnrollmentStatus.WAITING, now);
+	}
+
+	/**
+	 * 취소된 신청을 같은 행에서 다시 신청한다 (D-02). CANCELLED가 아니면 중복 신청이다 (E001).
+	 */
+	public void reapply(boolean confirmed, Instant now) {
+		if (status != EnrollmentStatus.CANCELLED) {
+			throw new BusinessException(ErrorCode.DUPLICATE_ENROLLMENT);
+		}
+		this.status = confirmed ? EnrollmentStatus.CONFIRMED : EnrollmentStatus.WAITING;
+		this.appliedAt = now;
 	}
 
 	public Long getId() {
