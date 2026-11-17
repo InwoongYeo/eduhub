@@ -1,5 +1,6 @@
 package com.eduhub.course.controller;
 
+import com.eduhub.course.domain.CourseStatus;
 import com.eduhub.course.dto.CourseDetailResponse;
 import com.eduhub.course.dto.CourseSummaryResponse;
 import com.eduhub.course.service.CourseService;
@@ -34,13 +35,14 @@ public class CourseController {
 		this.courseService = courseService;
 	}
 
-	@Operation(summary = "과정 목록 조회", description = "제목(keyword, 부분 일치)·분류(category, 정확히 일치)로 검색하고 페이지 단위로 조회한다 (page는 0부터)")
+	@Operation(summary = "과정 목록 조회", description = "제목(keyword, 부분 일치)·분류(category, 정확히 일치), 상태(status, OPEN·CLOSED, 생략하면 전체)로 검색하고 페이지 단위로 조회한다 (page는 0부터)")
 	@GetMapping
 	public PageResponse<CourseSummaryResponse> getCourses(
 			@RequestParam(required = false) String keyword,
 			@RequestParam(required = false) String category,
+			@RequestParam(required = false) CourseStatus status,
 			@ParameterObject @PageableDefault(size = 10, sort = "id", direction = Sort.Direction.DESC) Pageable pageable) {
-		return PageResponse.from(courseService.getCourses(keyword, category, pageable));
+		return PageResponse.from(courseService.getCourses(keyword, category, status, pageable));
 	}
 
 	@Operation(summary = "과정 상세 조회", description = "회차별 일정·장소·정원·남은 자리를 함께 돌려준다")

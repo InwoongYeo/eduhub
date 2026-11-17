@@ -7,6 +7,7 @@ import java.util.stream.Collectors;
 
 import com.eduhub.course.domain.Course;
 import com.eduhub.course.domain.CourseSession;
+import com.eduhub.course.domain.CourseStatus;
 import com.eduhub.course.dto.CourseDetailResponse;
 import com.eduhub.course.dto.CourseSummaryResponse;
 import com.eduhub.course.repository.CourseRepository;
@@ -35,9 +36,9 @@ public class CourseService {
 		this.courseSessionRepository = courseSessionRepository;
 	}
 
-	/** FR-01: 제목·분류로 검색, 페이지 단위. 쿼리 3번(목록, 전체 개수, 회차 수 집계) */
-	public Page<CourseSummaryResponse> getCourses(String keyword, String category, Pageable pageable) {
-		Page<Course> courses = courseRepository.findAll(CourseSpecifications.search(keyword, category), pageable);
+	/** FR-01: 제목·분류·상태로 검색, 페이지 단위. 쿼리 3번(목록, 전체 개수, 회차 수 집계) */
+	public Page<CourseSummaryResponse> getCourses(String keyword, String category, CourseStatus status, Pageable pageable) {
+		Page<Course> courses = courseRepository.findAll(CourseSpecifications.search(keyword, category, status), pageable);
 		List<Long> ids = courses.map(Course::getId).getContent();
 		Map<Long, Long> counts = ids.isEmpty() ? Collections.emptyMap()
 				: courseSessionRepository.countByCourseIds(ids).stream()
