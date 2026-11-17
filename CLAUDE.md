@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## 프로젝트
 
 EduHub: 사내 교육과정 조회·수강 신청 시스템 (정원 초과 시 대기자 등록). 요구사항(FR·NFR)과 결정 사항(D-xx)의 기준은 `docs/requirements.md`다.
-진행 상태 (D-19): 백엔드는 FR-01~03, 프론트엔드는 과정 목록 화면(`course-mfe`)까지. 수강 신청·대기·취소(FR-04~06)는 다음 주차.
+진행 상태 (D-19): 백엔드는 FR-01~06(과정 조회·관리, 수강 신청·대기 순번·취소와 자동 승급)까지, 프론트엔드는 `course-mfe`의 과정 조회·과정 관리 화면(FR-01, FR-03)까지. 임직원 신청 화면(`enrollment-mfe`)과 shell·Module Federation 연결은 아직 없다. 남은 후속 과제는 D-37, D-38.
 
 ## 디렉터리 지도
 
