@@ -12,6 +12,7 @@ import java.util.Optional;
 
 import com.eduhub.course.domain.Course;
 import com.eduhub.course.domain.CourseSession;
+import com.eduhub.course.domain.CourseStatus;
 import com.eduhub.course.dto.CourseDetailResponse;
 import com.eduhub.course.dto.CourseSummaryResponse;
 import com.eduhub.course.repository.CourseRepository;
@@ -51,7 +52,7 @@ class CourseServiceTest {
 				.willReturn(new PageImpl<>(List.of(course), pageable, 1));
 		given(courseSessionRepository.countByCourseIds(any())).willReturn(List.of());
 
-		Page<CourseSummaryResponse> result = courseService.getCourses("자바", "개발", pageable);
+		Page<CourseSummaryResponse> result = courseService.getCourses("자바", "개발", CourseStatus.OPEN, pageable);
 
 		assertThat(result.getTotalElements()).isEqualTo(1);
 		assertThat(result.getContent().get(0).category()).isEqualTo("개발");

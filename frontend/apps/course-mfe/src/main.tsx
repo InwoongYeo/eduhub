@@ -1,16 +1,11 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { Container, CssBaseline, Typography } from '@mui/material';
-import { CourseListPage } from './pages/CourseListPage';
+import { CssBaseline } from '@mui/material';
+import { App } from './App';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <CssBaseline />
-    <Container sx={{ py: 4 }}>
-      <Typography variant="h5" component="h1" gutterBottom>
-        교육과정
-      </Typography>
-      <CourseListPage />
-    </Container>
+    <App />
   </StrictMode>,
 );

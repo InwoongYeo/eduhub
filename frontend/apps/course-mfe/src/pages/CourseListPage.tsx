@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import {
   Alert, Chip, CircularProgress, MenuItem, Stack, Table, TableBody, TableCell, TableHead, TablePagination, TableRow,
-  TextField,
+  TextField, Typography,
 } from '@mui/material';
+import { CATEGORIES } from '../constants/categories';
 import { useCourses } from '../hooks/useCourses';
 
 const PAGE_SIZE = 10;
-
-/** 분류 선택 목록. 분류는 정확히 일치로 검색한다 (D-18). 빈 값은 전체. */
-export const CATEGORIES = ['개발', '데이터', '리더십', '직무공통'];
 
 /** 과정 상태 표시 (CourseStatus: OPEN, CLOSED) */
 function StatusChip({ status }: { status: string }) {
@@ -28,6 +26,7 @@ export function CourseListPage() {
 
   return (
     <Stack spacing={2}>
+      <Typography variant="h5" component="h1">교육과정</Typography>
       <Stack direction="row" spacing={2}>
         <TextField
           label="과정명 검색"

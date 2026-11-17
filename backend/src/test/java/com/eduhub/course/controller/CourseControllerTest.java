@@ -1,11 +1,14 @@
 package com.eduhub.course.controller;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -49,6 +52,35 @@ class CourseControllerTest {
 	}
 
 	@Test
+	void 상태로_검색할_수_있다() throws Exception {
+		long javaId = findCourseId("자바 기초");
+		String token = adminToken();
+		mockMvc.perform(post("/api/v1/courses/{id}/close", javaId)
+						.header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+				.andExpect(status().isNoContent());
+
+		mockMvc.perform(get("/api/v1/courses").param("status", "CLOSED"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements").value(1))
+				.andExpect(jsonPath("$.content[0].id").value(javaId))
+				.andExpect(jsonPath("$.content[0].status").value("CLOSED"));
+		mockMvc.perform(get("/api/v1/courses").param("status", "OPEN"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements").value(2))
+				.andExpect(jsonPath("$.content[?(@.id == %d)]".formatted(javaId)).isEmpty());
+		mockMvc.perform(get("/api/v1/courses"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.totalElements").value(3));
+	}
+
+	@Test
+	void 잘못된_상태_값은_400_G001이다() throws Exception {
+		mockMvc.perform(get("/api/v1/courses").param("status", "WRONG"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("G001"));
+	}
+
+	@Test
 	void 목록의_회차_수는_과정별로_집계된다() throws Exception {
 		mockMvc.perform(get("/api/v1/courses").param("keyword", "자바 기초"))
 				.andExpect(status().isOk())
@@ -83,6 +115,14 @@ class CourseControllerTest {
 		mockMvc.perform(get("/v3/api-docs"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.info.title").value("EduHub API"));
+	}
+
+	private String adminToken() throws Exception {
+		String body = mockMvc.perform(post("/api/v1/auth/login").contentType(MediaType.APPLICATION_JSON)
+						.content("{\"email\": \"admin@eduhub.local\", \"password\": \"local-admin-only\"}"))
+				.andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		return JsonPath.read(body, "$.accessToken");
 	}
 
 	private long findCourseId(String title) throws Exception {
