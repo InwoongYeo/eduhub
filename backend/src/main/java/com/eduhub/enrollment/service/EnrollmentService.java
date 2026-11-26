@@ -15,6 +15,8 @@ import com.eduhub.enrollment.dto.EnrollmentResponse;
 import com.eduhub.enrollment.repository.EnrollmentRepository;
 import com.eduhub.global.error.BusinessException;
 import com.eduhub.global.error.ErrorCode;
+import com.eduhub.notification.domain.NotificationType;
+import com.eduhub.notification.service.NotificationService;
 import com.eduhub.user.domain.User;
 import com.eduhub.user.repository.UserRepository;
 import org.hibernate.exception.ConstraintViolationException;
@@ -40,13 +42,16 @@ public class EnrollmentService {
 	private final EnrollmentRepository enrollmentRepository;
 	private final UserRepository userRepository;
 	private final Clock clock;
+	private final NotificationService notificationService;
 
 	public EnrollmentService(CourseSessionRepository courseSessionRepository,
-			EnrollmentRepository enrollmentRepository, UserRepository userRepository, Clock clock) {
+			EnrollmentRepository enrollmentRepository, UserRepository userRepository, Clock clock,
+			NotificationService notificationService) {
 		this.courseSessionRepository = courseSessionRepository;
 		this.enrollmentRepository = enrollmentRepository;
 		this.userRepository = userRepository;
 		this.clock = clock;
+		this.notificationService = notificationService;
 	}
 
 	/**
@@ -92,6 +97,10 @@ public class EnrollmentService {
 					sessionId, employeeId, describeConstraint(e), e);
 			throw e;
 		}
+		// 알림은 잠금 뒤, 신청 저장과 같은 트랜잭션에서 기록한다 (FR-09). 롤백되면 함께 사라진다.
+		if (saved.getStatus() == EnrollmentStatus.CONFIRMED) {
+			notificationService.record(employee, session, NotificationType.ENROLLMENT_CONFIRMED);
+		}
 		// 순번은 회차 잠금을 쥔 채 저장 뒤에 계산해야 동시 신청에서도 정확하다 (FR-05, D-36)
 		// 전제: 회차 잠금(findByIdForUpdate) 이전에 일반 SELECT를 두지 않는다. MySQL REPEATABLE READ의 스냅숏이
 		// 잠금 뒤 첫 일반 읽기에서 만들어져야 countWaitingAhead가 앞선 신청의 커밋을 본다. 어기면 대기 순번이
@@ -120,6 +129,7 @@ public class EnrollmentService {
 					.findFirstBySessionIdAndStatusOrderByAppliedAtAscIdAsc(sessionId, EnrollmentStatus.WAITING);
 			if (next.isPresent()) {
 				next.get().promote();
+				notificationService.record(next.get().getEmployee(), session, NotificationType.WAITLIST_PROMOTED);
 			} else {
 				session.releaseSeat();
 			}

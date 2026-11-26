@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 
 import java.sql.SQLException;
@@ -24,6 +25,8 @@ import com.eduhub.enrollment.dto.EnrollmentResponse;
 import com.eduhub.enrollment.repository.EnrollmentRepository;
 import com.eduhub.global.error.BusinessException;
 import com.eduhub.global.error.ErrorCode;
+import com.eduhub.notification.domain.NotificationType;
+import com.eduhub.notification.service.NotificationService;
 import com.eduhub.user.domain.Role;
 import com.eduhub.user.domain.User;
 import com.eduhub.user.repository.UserRepository;
@@ -31,6 +34,7 @@ import org.hibernate.exception.ConstraintViolationException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
@@ -52,6 +56,9 @@ class EnrollmentServiceTest {
 	@Mock
 	UserRepository userRepository;
 
+	@Mock
+	NotificationService notificationService;
+
 	// 2026-12-01 09:00 서울
 	private final LocalDateTime startsAt = LocalDateTime.of(2026, 12, 1, 9, 0);
 	private Clock clock;
@@ -62,7 +69,7 @@ class EnrollmentServiceTest {
 	@BeforeEach
 	void 준비() {
 		clock = Clock.fixed(LocalDateTime.of(2026, 11, 16, 10, 0).atZone(SEOUL).toInstant(), SEOUL);
-		enrollmentService = new EnrollmentService(courseSessionRepository, enrollmentRepository, userRepository, clock);
+		enrollmentService = new EnrollmentService(courseSessionRepository, enrollmentRepository, userRepository, clock, notificationService);
 		course = Course.create("자바 기초", "입문", "개발");
 		employee = User.create("emp@test.local", "x", "임직원", Role.EMPLOYEE);
 	}
@@ -230,7 +237,7 @@ class EnrollmentServiceTest {
 	void 시작_시각과_같으면_E003이다() {
 		Clock atStart = Clock.fixed(startsAt.atZone(SEOUL).toInstant(), SEOUL);
 		EnrollmentService service = new EnrollmentService(
-				courseSessionRepository, enrollmentRepository, userRepository, atStart);
+				courseSessionRepository, enrollmentRepository, userRepository, atStart, notificationService);
 		givenLockedSession(session(2));
 
 		assertThatThrownBy(() -> service.enroll(SESSION_ID, EMPLOYEE_ID))
@@ -243,7 +250,7 @@ class EnrollmentServiceTest {
 	void 시작_시각이_지났으면_E003이다() {
 		Clock afterStart = Clock.fixed(startsAt.plusMinutes(1).atZone(SEOUL).toInstant(), SEOUL);
 		EnrollmentService service = new EnrollmentService(
-				courseSessionRepository, enrollmentRepository, userRepository, afterStart);
+				courseSessionRepository, enrollmentRepository, userRepository, afterStart, notificationService);
 		givenLockedSession(session(2));
 
 		assertThatThrownBy(() -> service.enroll(SESSION_ID, EMPLOYEE_ID))
@@ -407,7 +414,7 @@ class EnrollmentServiceTest {
 	void X4c_시작_시각이_지났으면_E006이고_확정_인원은_그대로다() {
 		Clock atStart = Clock.fixed(startsAt.atZone(SEOUL).toInstant(), SEOUL);
 		EnrollmentService service = new EnrollmentService(
-				courseSessionRepository, enrollmentRepository, userRepository, atStart);
+				courseSessionRepository, enrollmentRepository, userRepository, atStart, notificationService);
 		CourseSession session = session(1);
 		session.reserveSeat();
 		givenLockedSession(session);
@@ -493,5 +500,122 @@ class EnrollmentServiceTest {
 						e -> assertThat(e.getErrorCode()).isEqualTo(ErrorCode.UNAUTHORIZED));
 		assertThat(session.getConfirmedCount()).isZero();
 		verify(enrollmentRepository, never()).saveAndFlush(any());
+	}
+
+	@Test
+	void S1_신청이_CONFIRMED이면_확정_알림을_한_번_기록한다() {
+		CourseSession session = session(2);
+		givenLockedSession(session);
+		givenActiveEmployee();
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID)).willReturn(Optional.empty());
+		givenSaveReturnsArgument();
+
+		enrollmentService.enroll(SESSION_ID, EMPLOYEE_ID);
+
+		verify(notificationService, times(1)).record(employee, session, NotificationType.ENROLLMENT_CONFIRMED);
+	}
+
+	@Test
+	void S2_신청이_WAITING이면_알림을_기록하지_않는다() {
+		CourseSession session = session(1);
+		session.reserveSeat();
+		givenLockedSession(session);
+		givenActiveEmployee();
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID)).willReturn(Optional.empty());
+		givenSaveReturnsArgument();
+
+		enrollmentService.enroll(SESSION_ID, EMPLOYEE_ID);
+
+		verifyNoInteractions(notificationService);
+	}
+
+	@Test
+	void S3_취소_후_재신청이_CONFIRMED이면_확정_알림을_한_번_기록한다() {
+		CourseSession session = session(2);
+		Enrollment cancelled = Enrollment.create(employee, session, EnrollmentStatus.CANCELLED);
+		ReflectionTestUtils.setField(cancelled, "id", 55L);
+		givenLockedSession(session);
+		givenActiveEmployee();
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID))
+				.willReturn(Optional.of(cancelled));
+		givenSaveReturnsArgument();
+
+		enrollmentService.enroll(SESSION_ID, EMPLOYEE_ID);
+
+		verify(notificationService, times(1)).record(employee, session, NotificationType.ENROLLMENT_CONFIRMED);
+	}
+
+	@Test
+	void S4_확정_취소에_대기자가_있으면_승급자에게만_승급_알림을_기록한다() {
+		CourseSession session = session(1);
+		session.reserveSeat();
+		User promotedUser = User.create("next@test.local", "x", "대기자", Role.EMPLOYEE);
+		Enrollment mine = cancelTarget(session, EnrollmentStatus.CONFIRMED, 77L);
+		Enrollment next = Enrollment.create(promotedUser, session, EnrollmentStatus.WAITING);
+		ReflectionTestUtils.setField(next, "id", 78L);
+		givenLockedSession(session);
+		givenMine(mine);
+		givenNextWaiting(Optional.of(next));
+		givenSaveReturnsArgument();
+
+		enrollmentService.cancel(SESSION_ID, EMPLOYEE_ID);
+
+		ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+		verify(notificationService, times(1)).record(userCaptor.capture(), any(CourseSession.class),
+				any(NotificationType.class));
+		assertThat(userCaptor.getValue()).isSameAs(promotedUser).isNotSameAs(employee);
+		verify(notificationService).record(promotedUser, session, NotificationType.WAITLIST_PROMOTED);
+	}
+
+	@Test
+	void S5_대기자가_없거나_대기_취소이면_알림을_기록하지_않는다() {
+		CourseSession confirmedSession = session(2);
+		confirmedSession.reserveSeat();
+		givenLockedSession(confirmedSession);
+		givenMine(cancelTarget(confirmedSession, EnrollmentStatus.CONFIRMED, 77L));
+		givenNextWaiting(Optional.empty());
+		givenSaveReturnsArgument();
+		enrollmentService.cancel(SESSION_ID, EMPLOYEE_ID);
+		verifyNoInteractions(notificationService);
+
+		CourseSession waitingSession = session(1);
+		waitingSession.reserveSeat();
+		givenLockedSession(waitingSession);
+		givenMine(cancelTarget(waitingSession, EnrollmentStatus.WAITING, 78L));
+		enrollmentService.cancel(SESSION_ID, EMPLOYEE_ID);
+		verifyNoInteractions(notificationService);
+	}
+
+	@Test
+	void S6_거절_경로에서는_알림을_기록하지_않는다() {
+		// E001 중복
+		CourseSession dup = session(2);
+		givenLockedSession(dup);
+		givenActiveEmployee();
+		given(enrollmentRepository.findBySessionIdAndEmployeeId(SESSION_ID, EMPLOYEE_ID))
+				.willReturn(Optional.of(Enrollment.create(employee, dup, EnrollmentStatus.CONFIRMED)));
+		assertThatThrownBy(() -> enrollmentService.enroll(SESSION_ID, EMPLOYEE_ID))
+				.isInstanceOf(BusinessException.class);
+
+		// E002 종료
+		CourseSession closed = session(2);
+		closed.close();
+		givenLockedSession(closed);
+		assertThatThrownBy(() -> enrollmentService.enroll(SESSION_ID, EMPLOYEE_ID))
+				.isInstanceOf(BusinessException.class);
+
+		// E003 시작 후
+		Clock atStart = Clock.fixed(startsAt.atZone(SEOUL).toInstant(), SEOUL);
+		EnrollmentService late = new EnrollmentService(
+				courseSessionRepository, enrollmentRepository, userRepository, atStart, notificationService);
+		givenLockedSession(session(2));
+		assertThatThrownBy(() -> late.enroll(SESSION_ID, EMPLOYEE_ID)).isInstanceOf(BusinessException.class);
+
+		// C002 회차 없음
+		given(courseSessionRepository.findByIdForUpdate(SESSION_ID)).willReturn(Optional.empty());
+		assertThatThrownBy(() -> enrollmentService.enroll(SESSION_ID, EMPLOYEE_ID))
+				.isInstanceOf(BusinessException.class);
+
+		verifyNoInteractions(notificationService);
 	}
 }

@@ -16,8 +16,9 @@ Spring Boot 4.1.2 · Java 21 · Gradle Kotlin DSL. 기본 패키지는 `com.eduh
 
 ## 계층 규칙
 
-- 도메인별 패키지 `user`, `course`, `enrollment`, 각각 `controller`/`service`/`repository`/`domain`/`dto`. 공통은 `global.config`, `global.security`, `global.error`, `global.common`, `global.init`, `global.health`(`GET /api/v1/health`, 로그인 없이, D-33)
+- 도메인별 패키지 `user`, `course`, `enrollment`, `notification`, 각각 `controller`/`service`/`repository`/`domain`/`dto`(필요한 것만, `notification`은 컨트롤러·DTO 없음). 공통은 `global.config`, `global.security`, `global.error`, `global.common`, `global.init`, `global.health`(`GET /api/v1/health`, 로그인 없이, D-33)
 - 호출 방향은 controller → service → repository. `enrollment`가 `course`를 참조하므로 `course`는 `enrollment`를 참조하지 않는다
+- 알림(FR-09, D-42): `enrollment` → `notification` → (`user`, `course` 도메인 읽기). `notification`은 `enrollment`를 참조하지 않는다. 확정·승급하는 쪽이 같은 트랜잭션에서 `NotificationService.record`(전파 `MANDATORY`)를 직접 부른다. 새 승급 경로(D-41 등)도 같은 방식으로 연결한다
 - 서비스 클래스에 `@Transactional(readOnly = true)`, 쓰기 메서드에만 `@Transactional`. 조회(`CourseService`)와 관리자 변경(`CourseAdminService`)을 나눈다
 - 목록 API는 `Pageable`을 받아 `PageResponse.from(page)`로 반환 (기본 10, 최대 100)
 - 오류는 `BusinessException(ErrorCode.X)`로 던지고, 새 오류는 `ErrorCode`에 추가한다(접두어: 공통 `G`, 인증 `A`, 과정·회차 `C`, 수강 신청 `E`). `GlobalExceptionHandler`와 `SecurityConfig`가 `{code, message, timestamp}`로 응답한다

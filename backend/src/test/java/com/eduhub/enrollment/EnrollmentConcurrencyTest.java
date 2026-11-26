@@ -110,6 +110,9 @@ class EnrollmentConcurrencyTest {
 			jdbcTemplate.update("DELETE FROM course_session WHERE course_id = ?", courseId);
 			jdbcTemplate.update("DELETE FROM course WHERE id = ?", courseId);
 		}
+		// 확정·승급 알림(FR-09)이 users를 FK로 참조하므로 사용자보다 먼저 지운다
+		jdbcTemplate.update(
+				"DELETE FROM notification WHERE employee_id IN (SELECT id FROM users WHERE email LIKE 'load-%@test.local')");
 		jdbcTemplate.update("DELETE FROM users WHERE email LIKE 'load-%@test.local'");
 	}
 
@@ -195,6 +198,9 @@ class EnrollmentConcurrencyTest {
 		assertThat(dbCountOf(sessionId, EnrollmentStatus.WAITING)).isEqualTo(90);
 		assertThat(confirmedCountOf(sessionId)).isEqualTo(10);
 		assertThat(waitingNosOf(results)).containsExactlyElementsOf(rangeClosed(1, 90));
+		// FR-09 (D-42): 경합 중에도 확정 알림 수 = 확정 수, 대기자에게는 알림이 없다
+		assertThat(notifiedEmployeeIds("ENROLLMENT_CONFIRMED"))
+				.containsExactlyElementsOf(employeeIdsWith(sessionId, EnrollmentStatus.CONFIRMED));
 	}
 
 	@Test
@@ -380,6 +386,14 @@ class EnrollmentConcurrencyTest {
 		return applied;
 	}
 
+	/** 이 테스트의 임직원(load-*)이 받은 해당 type 알림의 수신자 id (중복 포함, 오름차순). 1인 1건인지도 함께 드러난다. */
+	private List<Long> notifiedEmployeeIds(String type) {
+		return jdbcTemplate.queryForList(
+				"SELECT n.employee_id FROM notification n JOIN users u ON u.id = n.employee_id "
+						+ "WHERE u.email LIKE 'load-%@test.local' AND n.type = ? ORDER BY n.employee_id",
+				Long.class, type);
+	}
+
 	private List<Long> employeeIdsWith(Long sessionId, EnrollmentStatus status) {
 		return jdbcTemplate.queryForList(
 				"SELECT employee_id FROM enrollment WHERE session_id = ? AND status = ? ORDER BY employee_id",
@@ -432,6 +446,8 @@ class EnrollmentConcurrencyTest {
 		assertThat(employeeIdsWith(sessionId, EnrollmentStatus.CONFIRMED)).containsExactlyElementsOf(firstTenWaiting);
 		assertThat(dbCountOf(sessionId, EnrollmentStatus.CANCELLED)).isEqualTo(10);
 		assertThat(currentWaitingNos(sessionId)).containsExactlyElementsOf(rangeClosed(1, 10));
+		// FR-09 (D-42): 동시 취소에서도 승급 알림은 승급된 10명에게만 1건씩 (취소자에게는 없음)
+		assertThat(notifiedEmployeeIds("WAITLIST_PROMOTED")).containsExactlyElementsOf(firstTenWaiting);
 	}
 
 	@Test
