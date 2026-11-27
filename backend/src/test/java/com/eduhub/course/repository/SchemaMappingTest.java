@@ -21,9 +21,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.data.jpa.test.autoconfigure.DataJpaTest;
 import org.springframework.boot.jdbc.test.autoconfigure.AutoConfigureTestDatabase;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
- * Flyway V1~V3으로 스키마를 만들고 ddl-auto=validate로 엔티티 매핑을 검증한다 (D-20).
+ * Flyway 마이그레이션 전체로 스키마를 만들고 ddl-auto=validate로 엔티티 매핑을 검증한다 (D-20).
  * Docker 없이 H2(MySQL 모드)로 실행한다. 엔티티를 바꿨는데 마이그레이션이 없으면 여기서 깨진다.
  */
 @DataJpaTest(properties = {
@@ -50,6 +51,9 @@ class SchemaMappingTest {
 
 	@Autowired
 	EntityManager em;
+
+	@Autowired
+	JdbcTemplate jdbcTemplate;
 
 	private final LocalDateTime base = LocalDateTime.of(2026, 12, 1, 9, 0);
 
@@ -93,5 +97,20 @@ class SchemaMappingTest {
 			enrollmentRepository.save(Enrollment.create(employee, session, EnrollmentStatus.WAITING));
 			em.flush();
 		}).isInstanceOfAny(DataIntegrityViolationException.class, org.hibernate.exception.ConstraintViolationException.class);
+	}
+
+	/** ddl-auto=validate는 인덱스를 확인하지 않으므로 V5 인덱스(D-43)의 존재와 컬럼 순서를 직접 조회한다. */
+	@Test
+	void 내_신청_내역_정렬용_인덱스는_임직원_신청일시_순서로_존재한다() {
+		List<String> columns = jdbcTemplate.queryForList("""
+				SELECT ic.COLUMN_NAME
+				FROM INFORMATION_SCHEMA.INDEXES i
+				JOIN INFORMATION_SCHEMA.INDEX_COLUMNS ic
+				  ON ic.INDEX_SCHEMA = i.INDEX_SCHEMA AND ic.INDEX_NAME = i.INDEX_NAME AND ic.TABLE_NAME = i.TABLE_NAME
+				WHERE UPPER(i.TABLE_NAME) = 'ENROLLMENT' AND UPPER(i.INDEX_NAME) = 'IDX_ENROLLMENT_EMPLOYEE_APPLIED'
+				ORDER BY ic.ORDINAL_POSITION
+				""", String.class);
+
+		assertThat(columns).extracting(String::toUpperCase).containsExactly("EMPLOYEE_ID", "APPLIED_AT");
 	}
 }

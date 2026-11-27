@@ -615,6 +615,78 @@
         }
       }
     },
+    "/api/v1/me/enrollments": {
+      "get": {
+        "tags": [
+          "Enrollment"
+        ],
+        "summary": "내 신청 내역",
+        "description": "토큰 사용자의 신청 내역을 최신 신청순으로 돌려준다. 대기 중인 신청에는 현재 대기 순번(waitingNo)을 계산해 담는다. 페이지 없이 전체를 돌려준다",
+        "operationId": "myEnrollments",
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "description": "CONFIRMED·WAITING·CANCELLED·COMPLETED, 생략 시 전체",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "CONFIRMED",
+                "WAITING",
+                "CANCELLED",
+                "COMPLETED"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "조회 성공 (없으면 빈 배열)",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/MyEnrollmentResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "status 값이 올바르지 않음",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "인증 실패",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "임직원이 아님",
+            "content": {
+              "*/*": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "tags": [
@@ -848,6 +920,72 @@
             "format": "int64"
           }
         }
+      },
+      "MyEnrollmentResponse": {
+        "type": "object",
+        "properties": {
+          "enrollmentId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "신청 ID",
+            "example": 12
+          },
+          "sessionId": {
+            "type": "integer",
+            "format": "int64",
+            "description": "회차 ID",
+            "example": 3
+          },
+          "courseTitle": {
+            "type": "string",
+            "description": "과정 제목",
+            "example": "자바 기초"
+          },
+          "sessionStartsAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "회차 시작 일시"
+          },
+          "location": {
+            "type": "string",
+            "description": "회차 장소",
+            "example": "본사 5층"
+          },
+          "status": {
+            "type": "string",
+            "description": "신청 상태: CONFIRMED, WAITING, CANCELLED, COMPLETED",
+            "enum": [
+              "CONFIRMED",
+              "WAITING",
+              "CANCELLED",
+              "COMPLETED"
+            ]
+          },
+          "appliedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "신청(재신청이면 마지막 신청) 시각"
+          },
+          "waitingNo": {
+            "type": [
+              "integer",
+              "null"
+            ],
+            "format": "int32",
+            "description": "WAITING일 때만 현재 대기 순번(1부터), 그 밖은 null",
+            "example": 4
+          }
+        },
+        "required": [
+          "appliedAt",
+          "courseTitle",
+          "enrollmentId",
+          "location",
+          "sessionId",
+          "sessionStartsAt",
+          "status",
+          "waitingNo"
+        ]
       },
       "CourseSummaryResponse": {
         "type": "object",
