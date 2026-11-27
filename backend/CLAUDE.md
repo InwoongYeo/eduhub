@@ -20,7 +20,7 @@ Spring Boot 4.1.2 · Java 21 · Gradle Kotlin DSL. 기본 패키지는 `com.eduh
 - 호출 방향은 controller → service → repository. `enrollment`가 `course`를 참조하므로 `course`는 `enrollment`를 참조하지 않는다
 - 알림(FR-09, D-42): `enrollment` → `notification` → (`user`, `course` 도메인 읽기). `notification`은 `enrollment`를 참조하지 않는다. 확정·승급하는 쪽이 같은 트랜잭션에서 `NotificationService.record`(전파 `MANDATORY`)를 직접 부른다. 새 승급 경로(D-41 등)도 같은 방식으로 연결한다
 - 서비스 클래스에 `@Transactional(readOnly = true)`, 쓰기 메서드에만 `@Transactional`. 조회(`CourseService`)와 관리자 변경(`CourseAdminService`)을 나눈다
-- 목록 API는 `Pageable`을 받아 `PageResponse.from(page)`로 반환 (기본 10, 최대 100)
+- 목록 API는 `Pageable`을 받아 `PageResponse.from(page)`로 반환 (기본 10, 최대 100). 예외: 내 신청 내역 `GET /api/v1/me/enrollments`는 SQL 1개 조건 때문에 페이지 없이 전체 목록 (D-43)
 - 오류는 `BusinessException(ErrorCode.X)`로 던지고, 새 오류는 `ErrorCode`에 추가한다(접두어: 공통 `G`, 인증 `A`, 과정·회차 `C`, 수강 신청 `E`). `GlobalExceptionHandler`와 `SecurityConfig`가 `{code, message, timestamp}`로 응답한다
 
 ## JPA 규칙
@@ -43,6 +43,7 @@ Spring Boot 4.1.2 · Java 21 · Gradle Kotlin DSL. 기본 패키지는 `com.eduh
 - `Course`(분류·상태) 1:N `CourseSession`(일정·장소·정원·확정 인원) 1:N `Enrollment`. 수강 신청 단위는 회차 (D-17), (임직원, 회차) 유니크
 - 남은 자리 = 정원 − `confirmedCount` (D-21). 신청·취소 로직은 이 값을 함께 바꾼다. 대기 순번은 WAITING 중 `appliedAt` 순서
 - 역할은 `EMPLOYEE`, `ADMIN` (D-14). `POST /api/v1/auth/login`이 HS256 JWT(`role` 클레임)를 발급하고 리소스 서버가 검증한다
+- 신청자·사용자 ID는 요청 파라미터로 받지 않고 컨트롤러에서 `CurrentUser.from(jwt).employeeId()`(`global.security`)로만 꺼낸다 (NFR-03, D-43)
 - `SecurityConfig`: API는 `/api/v1` 아래 (D-24). 로그인·Swagger·`GET /api/v1/courses/**` 공개 (D-22), 그 밖의 `/api/v1/courses/**`·`/api/v1/sessions/**`는 ADMIN, 나머지는 인증 필요. 비밀번호는 BCrypt로만 저장
 
 ## OpenAPI 규칙

@@ -29,7 +29,10 @@ import org.hibernate.type.SqlTypes;
 @Entity
 @Table(name = "enrollment",
 		uniqueConstraints = @UniqueConstraint(name = "uk_enrollment_employee_session", columnNames = {"employee_id", "session_id"}),
-		indexes = @Index(name = "idx_enrollment_session_status", columnList = "session_id, status"))
+		indexes = {
+				@Index(name = "idx_enrollment_session_status", columnList = "session_id, status"),
+				@Index(name = "idx_enrollment_employee_applied", columnList = "employee_id, applied_at")
+		})
 public class Enrollment {
 
 	@Id

@@ -1,6 +1,7 @@
 package com.eduhub.enrollment.repository;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 import com.eduhub.enrollment.domain.Enrollment;
@@ -28,4 +29,25 @@ public interface EnrollmentRepository extends JpaRepository<Enrollment, Long> {
 			  and (e.appliedAt < :appliedAt or (e.appliedAt = :appliedAt and e.id < :id))""")
 	long countWaitingAhead(@Param("sessionId") Long sessionId, @Param("appliedAt") Instant appliedAt,
 			@Param("id") Long id);
+
+	/**
+	 * 임직원의 신청 내역 (FR-07). SQL 1개로 과정·회차를 조인하고 대기 순번을 상관 서브쿼리로 계산한다.
+	 * 정렬은 신청 시각 내림차순, 같으면 id 내림차순. {@code status}가 null이면 전체.
+	 * 대기 순번 비교식은 {@link #countWaitingAhead}와 같아야 한다(D-36). 한쪽을 바꾸면 다른 쪽도 함께 바꾼다.
+	 */
+	@Query("""
+			select new com.eduhub.enrollment.repository.MyEnrollmentRow(
+			         e.id, s.id, c.title, s.startsAt, s.location, e.status, e.appliedAt,
+			         case when e.status = com.eduhub.enrollment.domain.EnrollmentStatus.WAITING then
+			           (select count(w) + 1 from Enrollment w
+			             where w.session = s
+			               and w.status = com.eduhub.enrollment.domain.EnrollmentStatus.WAITING
+			               and (w.appliedAt < e.appliedAt or (w.appliedAt = e.appliedAt and w.id < e.id)))
+			         end)
+			from Enrollment e join e.session s join s.course c
+			where e.employee.id = :employeeId
+			  and (:status is null or e.status = :status)
+			order by e.appliedAt desc, e.id desc""")
+	List<MyEnrollmentRow> findMyEnrollments(@Param("employeeId") Long employeeId,
+			@Param("status") EnrollmentStatus status);
 }

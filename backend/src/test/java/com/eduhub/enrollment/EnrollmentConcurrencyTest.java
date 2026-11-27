@@ -28,6 +28,7 @@ import com.eduhub.enrollment.domain.Enrollment;
 import com.eduhub.enrollment.domain.EnrollmentStatus;
 import com.eduhub.enrollment.dto.EnrollmentResponse;
 import com.eduhub.enrollment.repository.EnrollmentRepository;
+import com.eduhub.enrollment.repository.MyEnrollmentRow;
 import com.eduhub.enrollment.service.EnrollmentService;
 import com.eduhub.global.error.BusinessException;
 import com.eduhub.global.error.ErrorCode;
@@ -374,6 +375,27 @@ class EnrollmentConcurrencyTest {
 				Enrollment.create(employee, session, EnrollmentStatus.CONFIRMED)))
 				.isInstanceOfSatisfying(DataIntegrityViolationException.class,
 						e -> assertThat(EnrollmentService.isDuplicateEnrollment(e)).isTrue());
+	}
+
+	@Test
+	@DisplayName("M1: 실제 MySQL에서 내 신청 내역 조회는 대기 순번이 내 상태 조회와 같고 최신 신청순으로 정렬된다")
+	void 실제_MySQL에서_내_신청_내역_조회의_대기_순번과_정렬이_맞다() {
+		Long sessionId = createSession(1);
+		Map<Long, EnrollmentResponse> applied = enrollInOrder(sessionId, 3);
+		Long other = createSession(5);
+		Long waitingUser = userIds.get(1);
+		enrollmentService.enroll(other, waitingUser);
+
+		List<MyEnrollmentRow> rows = enrollmentRepository.findMyEnrollments(waitingUser, null);
+
+		assertThat(rows).extracting(MyEnrollmentRow::sessionId).containsExactly(other, sessionId);
+		assertThat(rows).extracting(MyEnrollmentRow::appliedAt).isSortedAccordingTo(java.util.Comparator.reverseOrder());
+		MyEnrollmentRow waiting = rows.get(1);
+		assertThat(waiting.status()).isEqualTo(EnrollmentStatus.WAITING);
+		assertThat(waiting.waitingNo()).isEqualTo(1L).isEqualTo(applied.get(waitingUser).waitingNo().longValue());
+		assertThat(enrollmentRepository.findMyEnrollments(userIds.get(2), EnrollmentStatus.WAITING))
+				.extracting(MyEnrollmentRow::waitingNo).containsExactly(2L);
+		assertThat(rows.get(0).waitingNo()).isNull();
 	}
 
 	/** 앞 번호 임직원부터 순서대로 신청시켜 (임직원 id -> 신청 응답)을 기록한다. 순번 기대값 계산의 기준이다. */

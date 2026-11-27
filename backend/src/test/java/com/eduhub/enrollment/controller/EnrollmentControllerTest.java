@@ -1,5 +1,6 @@
 package com.eduhub.enrollment.controller;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -11,6 +12,7 @@ import com.eduhub.user.domain.Role;
 import com.eduhub.user.domain.User;
 import com.eduhub.user.repository.UserRepository;
 import com.jayway.jsonpath.JsonPath;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -286,6 +288,125 @@ class EnrollmentControllerTest {
 				.andExpect(jsonPath("$.sessions[0].remainingSeats").value(1));
 	}
 
+	@Test
+	void 신청_후_내_신청_내역을_조회하면_200과_1건의_필드를_받는다() throws Exception {
+		long sessionId = createSession(adminToken());
+		String employee = employeeToken();
+		mockMvc.perform(enroll(sessionId, employee)).andExpect(status().isCreated());
+
+		mockMvc.perform(myEnrollments(employee))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(1))
+				.andExpect(jsonPath("$[0].enrollmentId").isNumber())
+				.andExpect(jsonPath("$[0].sessionId").value(sessionId))
+				.andExpect(jsonPath("$[0].courseTitle").value("신청 테스트"))
+				.andExpect(jsonPath("$[0].sessionStartsAt").value("2099-01-10T09:00:00"))
+				.andExpect(jsonPath("$[0].location").value("본사 5층"))
+				.andExpect(jsonPath("$[0].status").value("CONFIRMED"))
+				.andExpect(jsonPath("$[0].appliedAt").isNotEmpty())
+				.andExpect(jsonPath("$[0].waitingNo").hasJsonPath())
+				.andExpect(jsonPath("$[0].waitingNo").value(nullValue()));
+	}
+
+	@Test
+	void 상태_필터는_맞는_신청만_돌려주고_잘못된_값은_400_G001이다() throws Exception {
+		long sessionId = createSession(adminToken());
+		String employee = employeeToken();
+		mockMvc.perform(enroll(sessionId, employee)).andExpect(status().isCreated());
+
+		mockMvc.perform(myEnrollments(employee).param("status", "WAITING"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(0));
+		mockMvc.perform(myEnrollments(employee).param("status", "CONFIRMED"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(1));
+		mockMvc.perform(myEnrollments(employee).param("status", "NOPE"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.code").value("G001"));
+	}
+
+	@Test
+	void 관리자_토큰으로_내_신청_내역을_조회하면_403_G003이고_토큰이_없으면_401_G002이다() throws Exception {
+		mockMvc.perform(myEnrollments(adminToken()))
+				.andExpect(status().isForbidden())
+				.andExpect(jsonPath("$.code").value("G003"));
+		mockMvc.perform(get("/api/v1/me/enrollments"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.code").value("G002"));
+	}
+
+	@Test
+	void 다른_임직원의_신청은_내_신청_내역에_보이지_않는다() throws Exception {
+		long sessionId = createSession(adminToken());
+		String employeeA = employeeToken();
+		mockMvc.perform(enroll(sessionId, employeeA)).andExpect(status().isCreated());
+		String password = "b-test-password";
+		String emailB = "b-" + UUID.randomUUID() + "@test.local";
+		userRepository.saveAndFlush(
+				User.create(emailB, passwordEncoder.encode(password), "임직원B", Role.EMPLOYEE));
+		String employeeB = login(emailB, password);
+
+		mockMvc.perform(myEnrollments(employeeB))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(0));
+		mockMvc.perform(myEnrollments(employeeA))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.length()").value(1));
+	}
+
+	@Test
+	void 정원_1에_세_명이_신청하면_내_신청_내역과_내_상태_조회의_대기_순번이_같고_1과_2이다() throws Exception {
+		long sessionId = createSession(adminToken(), 1);
+		String first = employeeToken();
+		String second = createEmployeeToken();
+		String third = createEmployeeToken();
+		mockMvc.perform(enroll(sessionId, first)).andExpect(status().isCreated())
+				.andExpect(jsonPath("$.status").value("CONFIRMED"));
+		mockMvc.perform(enroll(sessionId, second)).andExpect(status().isCreated());
+		mockMvc.perform(enroll(sessionId, third)).andExpect(status().isCreated());
+
+		assertWaitingNoMatches(sessionId, second, 1);
+		assertWaitingNoMatches(sessionId, third, 2);
+	}
+
+	@Test
+	void 대기자가_취소_후_다시_신청하면_두_조회의_대기_순번이_모두_맨_뒤로_같다() throws Exception {
+		long sessionId = createSession(adminToken(), 1);
+		String first = employeeToken();
+		String second = createEmployeeToken();
+		String third = createEmployeeToken();
+		mockMvc.perform(enroll(sessionId, first)).andExpect(status().isCreated());
+		mockMvc.perform(enroll(sessionId, second)).andExpect(status().isCreated());
+		mockMvc.perform(enroll(sessionId, third)).andExpect(status().isCreated());
+		mockMvc.perform(cancel(sessionId, second)).andExpect(status().isOk());
+		mockMvc.perform(enroll(sessionId, second)).andExpect(status().isCreated());
+
+		assertWaitingNoMatches(sessionId, third, 1);
+		assertWaitingNoMatches(sessionId, second, 2);
+	}
+
+	/** 내 신청 내역의 해당 회차 항목 waitingNo와 회차별 내 상태 조회의 waitingNo가 expected로 같은지 확인한다. */
+	private void assertWaitingNoMatches(long sessionId, String token, int expected) throws Exception {
+		String list = mockMvc.perform(myEnrollments(token)).andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString();
+		Integer fromList = JsonPath.<List<Integer>>read(list, "$[?(@.sessionId == " + sessionId + ")].waitingNo").get(0);
+		Integer fromMine = JsonPath.read(mockMvc.perform(findMine(sessionId, token)).andExpect(status().isOk())
+				.andReturn().getResponse().getContentAsString(), "$.waitingNo");
+		assertThat(fromList).isEqualTo(fromMine).isEqualTo(expected);
+	}
+
+	private String createEmployeeToken() throws Exception {
+		String password = "x-test-password";
+		String email = "x-" + UUID.randomUUID() + "@test.local";
+		userRepository.saveAndFlush(User.create(email, passwordEncoder.encode(password), "임직원X", Role.EMPLOYEE));
+		return login(email, password);
+	}
+
+	private MockHttpServletRequestBuilder myEnrollments(String token) {
+		return get("/api/v1/me/enrollments")
+				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
+	}
+
 	private MockHttpServletRequestBuilder cancel(long sessionId, String token) {
 		return post("/api/v1/sessions/{id}/enrollments/me/cancel", sessionId)
 				.header(HttpHeaders.AUTHORIZATION, "Bearer " + token);
@@ -319,6 +440,10 @@ class EnrollmentControllerTest {
 	}
 
 	private long createSession(String adminToken) throws Exception {
+		return createSession(adminToken, 2);
+	}
+
+	private long createSession(String adminToken, int capacity) throws Exception {
 		String courseBody = mockMvc.perform(post("/api/v1/courses")
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
 						.contentType(MediaType.APPLICATION_JSON).content(COURSE_JSON))
@@ -327,7 +452,8 @@ class EnrollmentControllerTest {
 		long courseId = JsonPath.<Number>read(courseBody, "$.id").longValue();
 		String sessionBody = mockMvc.perform(post("/api/v1/courses/{id}/sessions", courseId)
 						.header(HttpHeaders.AUTHORIZATION, "Bearer " + adminToken)
-						.contentType(MediaType.APPLICATION_JSON).content(SESSION_JSON))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content(SESSION_JSON.replace("\"capacity\": 2", "\"capacity\": " + capacity)))
 				.andExpect(status().isCreated())
 				.andReturn().getResponse().getContentAsString();
 		return JsonPath.<Number>read(sessionBody, "$.id").longValue();
